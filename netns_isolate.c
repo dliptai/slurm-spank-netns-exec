@@ -37,17 +37,20 @@
  *     systemctl restart slurmd
  */
 
+/* Must be defined before any header is included - features.h (pulled in by
+ * virtually every header) uses this to gate Linux-specific prototypes such as
+ * unshare(), setns(), and CLONE_NEWNET from <sched.h>. */
 #define _GNU_SOURCE
 
-#include <stdint.h>
 #include <slurm/spank.h>
 
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>     /* PATH_MAX */
 #include <sched.h>      /* unshare(), setns(), CLONE_NEWNET */
+#include <stdint.h>     /* uint32_t */
 #include <stdio.h>      /* snprintf(), perror() */
-#include <string.h>     /* strerror(), memset(), memcpy() */
+#include <string.h>     /* memset(), memcpy() */
 #include <unistd.h>     /* getuid(), fork(), _exit() */
 
 #include <net/if.h>     /* struct ifreq, IFNAMSIZ, IFF_UP, IFF_RUNNING */
@@ -184,8 +187,7 @@ int slurm_spank_job_prolog(spank_t sp, int ac, char **av)
 
     /* Create /run/netns/ if it doesn't exist */
     if (mkdir(NETNS_DIR, 0755) < 0 && errno != EEXIST) {
-        slurm_error("netns_isolate: prolog: mkdir(%s): %s",
-                    NETNS_DIR, strerror(errno));
+        slurm_error("netns_isolate: prolog: mkdir(%s): %m", NETNS_DIR);
         return -1;
     }
 
@@ -206,8 +208,7 @@ int slurm_spank_job_prolog(spank_t sp, int ac, char **av)
                        "(leftover from crashed job?), reusing", nspath);
             return 0;
         }
-        slurm_error("netns_isolate: prolog: open(%s): %s",
-                    nspath, strerror(errno));
+        slurm_error("netns_isolate: prolog: open(%s): %m", nspath);
         return -1;
     }
     close(fd);
@@ -220,7 +221,7 @@ int slurm_spank_job_prolog(spank_t sp, int ac, char **av)
      */
     pid = fork();
     if (pid < 0) {
-        slurm_error("netns_isolate: prolog: fork(): %s", strerror(errno));
+        slurm_error("netns_isolate: prolog: fork(): %m");
         unlink(nspath);
         return -1;
     }
@@ -254,7 +255,7 @@ int slurm_spank_job_prolog(spank_t sp, int ac, char **av)
     } while (pid < 0 && errno == EINTR);
 
     if (pid < 0) {
-        slurm_error("netns_isolate: prolog: waitpid(): %s", strerror(errno));
+        slurm_error("netns_isolate: prolog: waitpid(): %m");
         /*
          * Child outcome is unknown. unlink() will remove the target file but
          * if the child had already called mount() a stale bind-mount may
@@ -314,8 +315,7 @@ int slurm_spank_task_init_privileged(spank_t sp, int ac, char **av)
             slurm_error("netns_isolate: task_init: %s not found - "
                         "did the prolog succeed?", nspath);
         else
-            slurm_error("netns_isolate: task_init: open(%s): %s",
-                        nspath, strerror(errno));
+            slurm_error("netns_isolate: task_init: open(%s): %m", nspath);
         return -1;
     }
 
@@ -324,8 +324,7 @@ int slurm_spank_task_init_privileged(spank_t sp, int ac, char **av)
      * exec's will have only loopback - no external interfaces, no routes out.
      */
     if (setns(fd, CLONE_NEWNET) < 0) {
-        slurm_error("netns_isolate: task_init: setns(%s): %s",
-                    nspath, strerror(errno));
+        slurm_error("netns_isolate: task_init: setns(%s): %m", nspath);
         close(fd);
         return -1;
     }
@@ -368,14 +367,12 @@ int slurm_spank_job_epilog(spank_t sp, int ac, char **av)
      * ENOENT/EINVAL mean it's already gone - not an error.
      */
     if (umount2(nspath, MNT_DETACH) < 0 && errno != ENOENT && errno != EINVAL) {
-        slurm_error("netns_isolate: epilog: umount2(%s): %s",
-                    nspath, strerror(errno));
+        slurm_error("netns_isolate: epilog: umount2(%s): %m", nspath);
         failed = 1;
     }
 
     if (unlink(nspath) < 0 && errno != ENOENT) {
-        slurm_error("netns_isolate: epilog: unlink(%s): %s",
-                    nspath, strerror(errno));
+        slurm_error("netns_isolate: epilog: unlink(%s): %m", nspath);
         failed = 1;
     }
 
