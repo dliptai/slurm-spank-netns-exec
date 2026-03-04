@@ -143,7 +143,7 @@ int slurm_spank_init(spank_t sp, int ac, char **av)
  * exists, prepends `ip netns exec <n>` to the task argv. If the namespace
  * file is missing, logs an error and warns but does not fail the job.
  * ========================================================================= */
-int slurm_spank_task_init(spank_t sp, int ac, char **av)
+int slurm_spank_task_init_privileged(spank_t sp, int ac, char **av)
 {
     char job_partition[PARTNAME_MAX] = "";
     char nodename[256]               = "";
@@ -165,10 +165,10 @@ int slurm_spank_task_init(spank_t sp, int ac, char **av)
     if (strncmp(job_partition, cfg_partition, PARTNAME_MAX) != 0)
         return 0;
 
-    /* Check node — SLURMD_NODENAME is set by slurmd on each compute node */
-    if (spank_getenv(sp, "SLURMD_NODENAME", nodename,
+    /* Check node name */
+    if (spank_getenv(sp, "HOSTNAME", nodename,
                      sizeof(nodename)) != ESPANK_SUCCESS) {
-        slurm_error("netns_isolate: failed to get SLURMD_NODENAME");
+        slurm_error("netns_isolate: failed to get HOSTNAME");
         return -1;
     }
 

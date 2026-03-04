@@ -11,3 +11,11 @@ clean:
 
 print_example_conf:
 	@echo optional ${PWD}/netns_isolate.so partition=other netns=isolate nodes=c1
+
+help:
+	@echo "Usage: make [target]"
+	@echo "Targets:"
+	@echo "  all               Build the netns_isolate.so plugin"
+	@echo "  clean             Remove build artifacts"
+	@echo "  print_example_conf Print an example plugstack.conf line for this plugin"
+	@echo "  help              Show this help message"
