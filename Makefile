@@ -1,10 +1,4 @@
-# Where are the Slurm include files?
-# SLURMINC=/apps/slurm/latest/include
 SLURMINC=/usr/include
-
-PLUGINDIR=.
-NETNSSPANKDIR=${PLUGINDIR}/netns_isolate
-
 
 all: netns_isolate.so
 
@@ -15,6 +9,5 @@ netns_isolate.so: netns_isolate.c
 clean:
 	rm -f netns_isolate.o netns_isolate.so
 
-install: all
-	mkdir -p ${NETNSSPANKDIR}
-	install -m 755 netns_isolate.so ${NETNSSPANKDIR}/
+print_example_conf:
+	@echo optional ${PWD}/netns_isolate.so partition=other netns=isolate
