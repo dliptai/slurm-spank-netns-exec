@@ -10,4 +10,4 @@ clean:
 	rm -f netns_isolate.o netns_isolate.so
 
 print_example_conf:
-	@echo optional ${PWD}/netns_isolate.so partition=other netns=isolate
+	@echo optional ${PWD}/netns_isolate.so partition=other netns=isolate nodes=c1
