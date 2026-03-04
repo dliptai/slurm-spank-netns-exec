@@ -51,7 +51,7 @@
 
 SPANK_PLUGIN(netns_isolate, 1);
 
-#define IP_PATH      "/sbin/ip"
+#define IP_PATH      "/usr/sbin/ip"
 #define NETNS_DIR    "/run/netns"
 #define NSNAME_MAX   64
 #define PARTNAME_MAX 64
