@@ -44,19 +44,17 @@
 #include <fcntl.h>
 #include <limits.h>         /* PATH_MAX */
 #include <sched.h>          /* setns(), CLONE_NEWNET */
-#include <stdint.h>         /* uint32_t */
 #include <string.h>         /* strncmp(), strncpy() */
 #include <unistd.h>         /* access() */
+#include <stdio.h>          /* snprintf() */
 
 SPANK_PLUGIN(netns_spank, 1);
 
-#define NETNS_DIR    "/var/run/netns"
-#define NSNAME_MAX   64
 #define PARTNAME_MAX 64
 
 /* Configured via plugstack.conf arguments */
 static char cfg_partition[PARTNAME_MAX] = "";
-static char cfg_nsname[NSNAME_MAX]      = "";
+static char cfg_netns[PATH_MAX]      = "";
 
 
 /* ---------------------------------------------------------------------------
@@ -73,8 +71,8 @@ static int parse_opts(int ac, char **av)
             strncpy(cfg_partition, av[i] + 10, sizeof(cfg_partition) - 1);
             cfg_partition[sizeof(cfg_partition) - 1] = '\0';
         } else if (strncmp(av[i], "netns=", 6) == 0) {
-            strncpy(cfg_nsname, av[i] + 6, sizeof(cfg_nsname) - 1);
-            cfg_nsname[sizeof(cfg_nsname) - 1] = '\0';
+            strncpy(cfg_netns, av[i] + 6, sizeof(cfg_netns) - 1);
+            cfg_netns[sizeof(cfg_netns) - 1] = '\0';
         } else {
             slurm_error("netns_spank: unknown option '%s'", av[i]);
             return -1;
@@ -85,7 +83,7 @@ static int parse_opts(int ac, char **av)
         slurm_error("netns_spank: partition= is required");
         return -1;
     }
-    if (!cfg_nsname[0]) {
+    if (!cfg_netns[0]) {
         slurm_error("netns_spank: netns= is required");
         return -1;
     }
@@ -116,8 +114,7 @@ int slurm_spank_init(spank_t sp, int ac, char **av)
 int slurm_spank_task_init_privileged(spank_t sp, int ac, char **av)
 {
     char job_partition[PARTNAME_MAX] = "";
-    char nspath[PATH_MAX];
-    int n, fd;
+    int fd;
 
     /* Suppress unused parameter warnings */
     (void)ac; (void)av;
@@ -136,26 +133,18 @@ int slurm_spank_task_init_privileged(spank_t sp, int ac, char **av)
     if (strncmp(job_partition, cfg_partition, PARTNAME_MAX) != 0)
         return 0;
 
-    /* Build the expected namespace path */
-    n = snprintf(nspath, sizeof(nspath), "%s/%s", NETNS_DIR, cfg_nsname);
-    if (n <= 0 || (size_t)n >= sizeof(nspath)) {
-        slurm_error("netns_spank: namespace path truncated for '%s'",
-                    cfg_nsname);
-        return -1;
-    }
-
     /* Warn but don't fail if namespace doesn't exist on this node */
-    if (access(nspath, F_OK) < 0) {
+    if (access(cfg_netns, F_OK) < 0) {
         slurm_error("netns_spank: namespace '%s' not found at %s - "
                     "job will run in default namespace. "
                     "Has the namespace been created on this node?",
-                    cfg_nsname, nspath);
+                    cfg_netns, cfg_netns);
         return 0;
     }
 
-    fd = open(nspath, O_RDONLY);
+    fd = open(cfg_netns, O_RDONLY);
     if (fd < 0) {
-        slurm_error("netns_spank: open(%s): %m", nspath);
+        slurm_error("netns_spank: open(%s): %m", cfg_netns);
         return -1;
     }
 
@@ -165,12 +154,12 @@ int slurm_spank_task_init_privileged(spank_t sp, int ac, char **av)
      * subsequent become_user() and execve(), so the job runs isolated.
      */
     if (setns(fd, CLONE_NEWNET) < 0) {
-        slurm_error("netns_spank: setns(%s): %m", nspath);
+        slurm_error("netns_spank: setns(%s): %m", cfg_netns);
         close(fd);
         return -1;
     }
 
     close(fd);
-    slurm_verbose("netns_spank: task entered namespace '%s'", cfg_nsname);
+    slurm_verbose("netns_spank: task entered namespace '%s'", cfg_netns);
     return 0;
 }
