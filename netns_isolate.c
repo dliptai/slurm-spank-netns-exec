@@ -1,20 +1,17 @@
 /*
- * SPANK plugin for partition/node-based network namespace isolation
+ * SPANK plugin for partition-based network namespace isolation
  *
  * PURPOSE:
  *   Automatically moves job tasks into a pre-created named network namespace
- *   when the job is submitted to a designated partition AND runs on a node in
- *   a configured nodelist. Uses setns() in task_init_privileged (runs as root,
- *   pre-execve) so the job process inherits the namespace across the privilege
- *   drop and subsequent execve().
+ *   when the job is submitted to a designated partition. Uses setns() in
+ *   task_init_privileged (runs as root, pre-execve) so the job process
+ *   inherits the namespace across the privilege drop and subsequent execve().
  *
  * CONFIGURATION:
  *   Arguments are set in plugstack.conf, e.g.:
- *     optional <SLURM_LIB_DIR>/netns_spank.so partition=isolated-jobs nodes=gpu[1-10],cpu[1-20] netns=isolated
+ *     optional <SLURM_LIB_DIR>/netns_spank.so partition=isolated-jobs netns=isolated
  *
  *   partition= : jobs must be submitted to this partition (required)
- *   nodes=     : jobs must be running on a node in this list (required)
- *                accepts standard Slurm hostlist notation: node[1-10],node20
  *   netns=     : name of the pre-created network namespace (required)
  *
  * PRE-REQUISITES:
@@ -22,12 +19,13 @@
  *     ip netns add isolated
  *     ip netns exec isolated ip link set lo up
  *
- *   The namespace persists until the node reboots and is shared across jobs -
- *   it carries no per-job state. Multiple concurrent jobs safely share it.
+ *   This creates the namespace at /var/run/netns/<name>. The namespace
+ *   persists until the node reboots and is shared across jobs — it carries
+ *   no per-job state. Multiple concurrent jobs safely share it.
  *
  * DEPLOYMENT:
  *   Build:
- *     gcc -std=c99 -shared -fPIC -Wall -Wextra -I<SLURM_INCLUDE_DIR>/slurm \
+ *     gcc -std=c99 -shared -fPIC -Wall -Wextra -I<SLURM_INCLUDE_DIR> \
  *         -o netns_spank.so netns_spank.c -lslurm
  *
  *   Install:
@@ -35,39 +33,36 @@
  *     chmod 755 <SLURM_LIB_DIR>/netns_spank.so
  *
  *   Register in /etc/slurm/plugstack.conf:
- *     optional <SLURM_LIB_DIR>/netns_spank.so partition=<p> nodes=<n> netns=<ns>
+ *     optional <SLURM_LIB_DIR>/netns_spank.so partition=<p> netns=<ns>
  *
  */
 
 #define _GNU_SOURCE
 
 #include <slurm/spank.h>
-#include <slurm/slurm.h>    /* slurm_hostlist_create(), slurm_hostlist_find() */
 
 #include <fcntl.h>
 #include <limits.h>         /* PATH_MAX */
 #include <sched.h>          /* setns(), CLONE_NEWNET */
 #include <stdint.h>         /* uint32_t */
 #include <string.h>         /* strncmp(), strncpy() */
-#include <unistd.h>         /* access(), gethostname() */
+#include <unistd.h>         /* access() */
 
 SPANK_PLUGIN(netns_spank, 1);
 
 #define NETNS_DIR    "/var/run/netns"
 #define NSNAME_MAX   64
 #define PARTNAME_MAX 64
-#define NODELIST_MAX 1024
 
 /* Configured via plugstack.conf arguments */
 static char cfg_partition[PARTNAME_MAX] = "";
-static char cfg_nodelist[NODELIST_MAX]  = "";
 static char cfg_nsname[NSNAME_MAX]      = "";
 
 
 /* ---------------------------------------------------------------------------
  * parse_opts()
  *
- * Reads partition=, nodes=, and netns= from plugstack.conf arguments.
+ * Reads partition= and netns= from plugstack.conf arguments.
  * ------------------------------------------------------------------------- */
 static int parse_opts(int ac, char **av)
 {
@@ -77,9 +72,6 @@ static int parse_opts(int ac, char **av)
         if (strncmp(av[i], "partition=", 10) == 0) {
             strncpy(cfg_partition, av[i] + 10, sizeof(cfg_partition) - 1);
             cfg_partition[sizeof(cfg_partition) - 1] = '\0';
-        } else if (strncmp(av[i], "nodes=", 6) == 0) {
-            strncpy(cfg_nodelist, av[i] + 6, sizeof(cfg_nodelist) - 1);
-            cfg_nodelist[sizeof(cfg_nodelist) - 1] = '\0';
         } else if (strncmp(av[i], "netns=", 6) == 0) {
             strncpy(cfg_nsname, av[i] + 6, sizeof(cfg_nsname) - 1);
             cfg_nsname[sizeof(cfg_nsname) - 1] = '\0';
@@ -93,40 +85,12 @@ static int parse_opts(int ac, char **av)
         slurm_error("netns_spank: partition= is required");
         return -1;
     }
-    if (!cfg_nodelist[0]) {
-        slurm_error("netns_spank: nodes= is required");
-        return -1;
-    }
     if (!cfg_nsname[0]) {
         slurm_error("netns_spank: netns= is required");
         return -1;
     }
 
     return 0;
-}
-
-
-/* ---------------------------------------------------------------------------
- * node_in_list()
- *
- * Returns 1 if nodename appears in the Slurm hostlist expression nodelist,
- * 0 if not, -1 on error. Uses the Slurm hostlist API to correctly handle
- * bracket notation such as node[1-10],gpu[01-04].
- * ------------------------------------------------------------------------- */
-static int node_in_list(const char *nodename, const char *nodelist)
-{
-    hostlist_t *hl;
-    int found;
-
-    hl = slurm_hostlist_create(nodelist);
-    if (!hl) {
-        slurm_error("netns_spank: failed to parse nodelist '%s'", nodelist);
-        return -1;
-    }
-
-    found = slurm_hostlist_find(hl, nodename) >= 0;
-    slurm_hostlist_destroy(hl);
-    return found;
 }
 
 
@@ -142,10 +106,9 @@ int slurm_spank_init(spank_t sp, int ac, char **av)
  * TASK INIT PRIVILEGED - runs as root in the forked task child, before
  * become_user() and execve().
  *
- * Checks partition and node criteria. If both match and the namespace file
- * exists, enters the pre-created namespace via setns().
- * The namespace is inherited across the subsequent become_user() privilege
- * drop and execve(), so the job runs isolated.
+ * If the job's partition matches cfg_partition, enters the pre-created
+ * namespace via setns(). The namespace is inherited across the subsequent
+ * become_user() privilege drop and execve(), so the job runs isolated.
  *
  * If the namespace file is missing, logs an error and allows the job to
  * continue in the default namespace rather than blocking it.
@@ -153,9 +116,8 @@ int slurm_spank_init(spank_t sp, int ac, char **av)
 int slurm_spank_task_init_privileged(spank_t sp, int ac, char **av)
 {
     char job_partition[PARTNAME_MAX] = "";
-    char nodename[256]               = "";
     char nspath[PATH_MAX];
-    int n, rc, fd;
+    int n, fd;
 
     /* Suppress unused parameter warnings */
     (void)ac; (void)av;
@@ -173,26 +135,6 @@ int slurm_spank_task_init_privileged(spank_t sp, int ac, char **av)
     }
     if (strncmp(job_partition, cfg_partition, PARTNAME_MAX) != 0)
         return 0;
-
-    /* Check node name. Can't use HOSTNAME env var because for direct srun
-     * calls HOSTNAME remains set to the submit node; use gethostname().
-     */
-    if (gethostname(nodename, sizeof(nodename)) < 0) {
-        slurm_error("netns_isolate: gethostname() failed: %m");
-        return -1;
-    }
-
-    rc = node_in_list(nodename, cfg_nodelist);
-    if (rc < 0) {
-        slurm_verbose("netns_spank: failed to parse nodelist '%s'", cfg_nodelist);
-        return -1;
-    }
-    if (rc == 0) {
-        slurm_verbose("netns_spank: node '%s' not in configured nodelist '%s' - "
-                    "job will run in default namespace",
-                    nodename, cfg_nodelist);
-        return 0;
-    }
 
     /* Build the expected namespace path */
     n = snprintf(nspath, sizeof(nspath), "%s/%s", NETNS_DIR, cfg_nsname);
@@ -229,7 +171,6 @@ int slurm_spank_task_init_privileged(spank_t sp, int ac, char **av)
     }
 
     close(fd);
-    slurm_verbose("netns_spank: task on %s entered namespace '%s'",
-                  nodename, cfg_nsname);
+    slurm_verbose("netns_spank: task entered namespace '%s'", cfg_nsname);
     return 0;
 }
