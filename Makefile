@@ -1,9 +1,9 @@
-SLURMINC=/usr/include
+SLURM_INCLUDE_DIR=/usr/include
 
 all: netns_spank.so
 
 netns_spank.so: netns_spank.c
-	gcc -I$(SLURMINC) -std=gnu99 -Wall -o netns_spank.o -fPIC -c netns_spank.c
+	gcc -I$(SLURM_INCLUDE_DIR) -std=gnu99 -Wall -o netns_spank.o -fPIC -c netns_spank.c
 	gcc -shared -o netns_spank.so netns_spank.o
 
 clean:
