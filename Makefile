@@ -10,7 +10,7 @@ clean:
 	rm -f netns_spank.o netns_spank.so
 
 print_example_conf:
-	@echo optional ${PWD}/netns_spank.so partition=other netns=isolate nodes=c1
+	@echo optional ${PWD}/netns_spank.so partition=partition_name netns=/var/run/netns/netns_name
 
 help:
 	@echo "Usage: make [target]"

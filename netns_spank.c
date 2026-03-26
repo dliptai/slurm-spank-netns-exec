@@ -9,10 +9,10 @@
  *
  * CONFIGURATION:
  *   Arguments are set in plugstack.conf, e.g.:
- *     optional <SLURM_LIB_DIR>/netns_spank.so partition=isolated-jobs netns=isolated
+ *     optional <SLURM_LIB_DIR>/netns_spank.so partition=isolated-jobs netns=/var/run/netns/isolated
  *
- *   partition= : jobs must be submitted to this partition (required)
- *   netns=     : name of the pre-created network namespace (required)
+ *   partition= : jobs must be submitted to this slurm partition (required)
+ *   netns=     : full path to the pre-created network namespace (required)
  *
  * PRE-REQUISITES:
  *   The namespace must be created on each applicable compute node, e.g.:
