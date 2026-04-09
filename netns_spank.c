@@ -20,7 +20,7 @@
  *     ip netns exec isolated ip link set lo up
  *
  *   This creates the namespace at /var/run/netns/<name>. The namespace
- *   persists until the node reboots and is shared across jobs — it carries
+ *   persists until the node reboots and is shared across jobs - it carries
  *   no per-job state. Multiple concurrent jobs safely share it.
  *
  * DEPLOYMENT:
