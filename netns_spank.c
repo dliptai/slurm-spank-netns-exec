@@ -1,5 +1,5 @@
 /*
- * SPANK plugin for partition-based network namespace isolation
+ * SPANK plugin for running jobs in a network namespace.
  *
  * PURPOSE:
  *   Automatically moves job tasks into a pre-created named network namespace
@@ -106,7 +106,7 @@ int slurm_spank_init(spank_t sp, int ac, char **av)
  *
  * If the job's partition matches cfg_partition, enters the pre-created
  * namespace via setns(). The namespace is inherited across the subsequent
- * become_user() privilege drop and execve(), so the job runs isolated.
+ * become_user() privilege drop and execve(), so the job runs in that namespace.
  *
  * If the namespace file is missing, logs an error and allows the job to
  * continue in the default namespace rather than blocking it.
@@ -151,7 +151,7 @@ int slurm_spank_task_init_privileged(spank_t sp, int ac, char **av)
     /*
      * Enter the namespace. This affects only the current forked task child -
      * slurmstepd is unaffected. The namespace is inherited across the
-     * subsequent become_user() and execve(), so the job runs isolated.
+     * subsequent become_user() and execve(), so the job runs in that namespace.
      */
     if (setns(fd, CLONE_NEWNET) < 0) {
         slurm_error("netns_spank: setns(%s): %m", cfg_netns);
