@@ -109,10 +109,8 @@ int slurm_spank_init(spank_t sp, int ac, char **av)
  * namespace via setns(). The namespace is inherited across the subsequent
  * become_user() privilege drop and execve(), so the job runs in that namespace.
  *
- * Errors that could be caused by misconfiguration or missing setup on the node
- * (missing namespace, access issues, ownership problems, etc.) are logged and
- * don't block the job - instead it simply runs in the default namespace.
- * Only true setup failures that indicate a plugin problem are fatal.
+ * Configuration and setup errors are logged but gracefully skipped so the job
+ * runs in the default namespace. Only true plugin errors are fatal.
  * ========================================================================= */
 int slurm_spank_task_init_privileged(spank_t sp, int ac, char **av)
 {
