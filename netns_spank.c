@@ -26,7 +26,7 @@
  * DEPLOYMENT:
  *   Build:
  *     gcc -std=c99 -shared -fPIC -Wall -Wextra -I<SLURM_INCLUDE_DIR> \
- *         -o netns_spank.so netns_spank.c -lslurm
+ *         -o netns_spank.so netns_spank.c
  *
  *   Install:
  *     cp netns_spank.so <SLURM_LIB_DIR>

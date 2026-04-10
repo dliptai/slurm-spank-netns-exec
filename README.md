@@ -27,7 +27,7 @@ Multiple concurrent jobs safely share it.
 ## Deployment
 Build:
 ```
-gcc -std=c99 -shared -fPIC -Wall -Wextra -I<SLURM_INCLUDE_DIR> -o netns_spank.so netns_spank.c -lslurm
+gcc -std=c99 -shared -fPIC -Wall -Wextra -I<SLURM_INCLUDE_DIR> -o netns_spank.so netns_spank.c
 ```
 
 Install
