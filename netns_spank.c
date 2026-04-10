@@ -61,6 +61,7 @@ static char cfg_netns[PATH_MAX]         = "";
  * parse_opts()
  *
  * Reads partition= and netns= from plugstack.conf arguments.
+ * Returns 0 on success and -1 on failure.
  * ------------------------------------------------------------------------- */
 static int parse_opts(int ac, char **av)
 {
