@@ -54,19 +54,18 @@ SPANK_PLUGIN(netns_spank, 1);
 
 /* Configured via plugstack.conf arguments */
 static char cfg_partition[PARTNAME_MAX] = "";
-static char cfg_netns[PATH_MAX]      = "";
+static char cfg_netns[PATH_MAX]         = "";
 
 
 /* ---------------------------------------------------------------------------
  * parse_opts()
  *
  * Reads partition= and netns= from plugstack.conf arguments.
+ * Returns 0 on success and -1 on failure.
  * ------------------------------------------------------------------------- */
 static int parse_opts(int ac, char **av)
 {
-    int i;
-
-    for (i = 0; i < ac; i++) {
+    for (int i = 0; i < ac; i++) {
         if (strncmp(av[i], "partition=", 10) == 0) {
             strncpy(cfg_partition, av[i] + 10, sizeof(cfg_partition) - 1);
             cfg_partition[sizeof(cfg_partition) - 1] = '\0';
