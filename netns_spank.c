@@ -41,10 +41,12 @@
 
 #include <slurm/spank.h>
 
+#include <errno.h>
 #include <fcntl.h>
 #include <limits.h>         /* PATH_MAX */
 #include <sched.h>          /* setns(), CLONE_NEWNET */
 #include <string.h>         /* strncmp(), strncpy() */
+#include <sys/stat.h>       /* fstat() */
 #include <unistd.h>         /* access() */
 #include <stdio.h>          /* snprintf() */
 
@@ -132,18 +134,31 @@ int slurm_spank_task_init_privileged(spank_t sp, int ac, char **av)
     if (strncmp(job_partition, cfg_partition, PARTNAME_MAX) != 0)
         return 0;
 
-    /* Warn but don't fail if namespace doesn't exist on this node */
-    if (access(cfg_netns, F_OK) < 0) {
-        slurm_error("netns_spank: namespace '%s' not found at %s - "
-                    "job will run in default namespace. "
-                    "Has the namespace been created on this node?",
-                    cfg_netns, cfg_netns);
-        return 0;
+    /*
+     * Open the namespace file with secure flags:
+     *   O_RDONLY       - read-only (we only need to pass it to setns)
+     *   O_CLOEXEC      - close on execve() to prevent leaking the fd to the job
+     *   O_NOFOLLOW     - fail if cfg_netns is a symlink (prevents symlink attacks)
+     */
+    fd = open(cfg_netns, O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
+    if (fd < 0) {
+        /* If namespace doesn't exist on this node, allow the task to run in default namespace */
+        if (errno == ENOENT) {
+            slurm_error("netns_spank: namespace '%s' not found - "
+                        "job will run in default namespace. "
+                        "Has the namespace been created on this node?",
+                        cfg_netns);
+            return 0;  /* Graceful skip if namespace doesn't exist */
+        }
+        /* Other errors (permissions, IO, etc.) are fatal */
+        slurm_error("netns_spank: open(%s): %m", cfg_netns);
+        return -1;
     }
 
-    fd = open(cfg_netns, O_RDONLY);
-    if (fd < 0) {
-        slurm_error("netns_spank: open(%s): %m", cfg_netns);
+    struct stat st;
+    if (fstat(fd, &st) < 0 || st.st_uid != 0) {
+        slurm_error("netns_spank: namespace not owned by root!");
+        close(fd);
         return -1;
     }
 
