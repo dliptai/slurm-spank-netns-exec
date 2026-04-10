@@ -54,7 +54,7 @@ SPANK_PLUGIN(netns_spank, 1);
 
 /* Configured via plugstack.conf arguments */
 static char cfg_partition[PARTNAME_MAX] = "";
-static char cfg_netns[PATH_MAX]      = "";
+static char cfg_netns[PATH_MAX]         = "";
 
 
 /* ---------------------------------------------------------------------------
