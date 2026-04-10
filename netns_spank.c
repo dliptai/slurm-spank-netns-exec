@@ -54,6 +54,8 @@ SPANK_PLUGIN(netns_spank, 1);
 
 #define PARTNAME_MAX 64
 
+#include "netns_spank.h"
+
 /* Configured via plugstack.conf arguments */
 static char cfg_partition[PARTNAME_MAX] = "";
 static char cfg_netns[PATH_MAX]         = "";
@@ -76,17 +78,17 @@ static int parse_opts(int ac, char **av)
             cfg_netns[sizeof(cfg_netns) - 1] = '\0';
         } else {
             slurm_error("netns_spank: unknown option '%s'", av[i]);
-            return -1;
+            return RC_UNKNOWN_OPT;
         }
     }
 
     if (!cfg_partition[0]) {
         slurm_error("netns_spank: partition= is required");
-        return -1;
+        return RC_MISSING_CONFIG;
     }
     if (!cfg_netns[0]) {
         slurm_error("netns_spank: netns= is required");
-        return -1;
+        return RC_MISSING_CONFIG;
     }
 
     return 0;
@@ -122,14 +124,14 @@ int slurm_spank_task_init_privileged(spank_t sp, int ac, char **av)
 
     if (spank_context() != S_CTX_REMOTE) {
         slurm_verbose("netns_spank: skipping - not running in remote task context");
-        return 0;
+        return RC_REMOTE_CTX;
     }
 
     /* Check partition */
     if (spank_getenv(sp, "SLURM_JOB_PARTITION", job_partition,
                      sizeof(job_partition)) != ESPANK_SUCCESS) {
         slurm_error("netns_spank: failed to get SLURM_JOB_PARTITION");
-        return 0;  /* graceful skip */
+        return RC_GETENV_FAIL;
     }
     if (strncmp(job_partition, cfg_partition, PARTNAME_MAX) != 0)
         return 0;  /* not our partition */
@@ -147,17 +149,17 @@ int slurm_spank_task_init_privileged(spank_t sp, int ac, char **av)
                         "job will run in default namespace. "
                         "Has the namespace been created on this node?",
                         cfg_netns);
-            return 0;  /* graceful skip */
+            return RC_NS_ENOENT;
         }
         slurm_error("netns_spank: open(%s): %m", cfg_netns);
-        return 0;  /* graceful skip */
+        return RC_OPEN_FAIL;
     }
 
     struct stat st;
     if (fstat(fd, &st) < 0 || st.st_uid != 0) {
         slurm_error("netns_spank: namespace not owned by root!");
         close(fd);
-        return 0;  /* graceful skip */
+        return RC_FSTAT_FAIL;
     }
 
     /*
@@ -168,7 +170,7 @@ int slurm_spank_task_init_privileged(spank_t sp, int ac, char **av)
     if (setns(fd, CLONE_NEWNET) < 0) {
         slurm_error("netns_spank: setns(%s): %m", cfg_netns);
         close(fd);
-        return 0;  /* graceful skip */
+        return RC_SETNS_FAIL;
     }
 
     close(fd);
