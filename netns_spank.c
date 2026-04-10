@@ -109,8 +109,10 @@ int slurm_spank_init(spank_t sp, int ac, char **av)
  * namespace via setns(). The namespace is inherited across the subsequent
  * become_user() privilege drop and execve(), so the job runs in that namespace.
  *
- * If the namespace file is missing, logs an error and allows the job to
- * continue in the default namespace rather than blocking it.
+ * Errors that could be caused by misconfiguration or missing setup on the node
+ * (missing namespace, access issues, ownership problems, etc.) are logged and
+ * don't block the job - instead it simply runs in the default namespace.
+ * Only true setup failures that indicate a plugin problem are fatal.
  * ========================================================================= */
 int slurm_spank_task_init_privileged(spank_t sp, int ac, char **av)
 {
@@ -129,10 +131,10 @@ int slurm_spank_task_init_privileged(spank_t sp, int ac, char **av)
     if (spank_getenv(sp, "SLURM_JOB_PARTITION", job_partition,
                      sizeof(job_partition)) != ESPANK_SUCCESS) {
         slurm_error("netns_spank: failed to get SLURM_JOB_PARTITION");
-        return -1;
+        return 0;  /* graceful skip */
     }
     if (strncmp(job_partition, cfg_partition, PARTNAME_MAX) != 0)
-        return 0;
+        return 0;  /* not our partition */
 
     /*
      * Open the namespace file with secure flags:
@@ -142,24 +144,22 @@ int slurm_spank_task_init_privileged(spank_t sp, int ac, char **av)
      */
     fd = open(cfg_netns, O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
     if (fd < 0) {
-        /* If namespace doesn't exist on this node, allow the task to run in default namespace */
         if (errno == ENOENT) {
             slurm_error("netns_spank: namespace '%s' not found - "
                         "job will run in default namespace. "
                         "Has the namespace been created on this node?",
                         cfg_netns);
-            return 0;  /* Graceful skip if namespace doesn't exist */
+            return 0;  /* graceful skip */
         }
-        /* Other errors (permissions, IO, etc.) are fatal */
         slurm_error("netns_spank: open(%s): %m", cfg_netns);
-        return -1;
+        return 0;  /* graceful skip */
     }
 
     struct stat st;
     if (fstat(fd, &st) < 0 || st.st_uid != 0) {
         slurm_error("netns_spank: namespace not owned by root!");
         close(fd);
-        return -1;
+        return 0;  /* graceful skip */
     }
 
     /*
@@ -170,7 +170,7 @@ int slurm_spank_task_init_privileged(spank_t sp, int ac, char **av)
     if (setns(fd, CLONE_NEWNET) < 0) {
         slurm_error("netns_spank: setns(%s): %m", cfg_netns);
         close(fd);
-        return -1;
+        return 0;  /* graceful skip */
     }
 
     close(fd);
