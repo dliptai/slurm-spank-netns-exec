@@ -69,6 +69,11 @@ static char cfg_netns[PATH_MAX]         = "";
  * ------------------------------------------------------------------------- */
 static int parse_opts(int ac, char **av)
 {
+
+    /* Reset config for each call */
+    memset(cfg_partition, 0, sizeof(cfg_partition));
+    memset(cfg_netns, 0, sizeof(cfg_netns));
+
     for (int i = 0; i < ac; i++) {
         if (strncmp(av[i], "partition=", 10) == 0) {
             strncpy(cfg_partition, av[i] + 10, sizeof(cfg_partition) - 1);
