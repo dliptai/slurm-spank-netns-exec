@@ -2,58 +2,143 @@
  * Simple test for netns_spank plugin initialization
  */
 
+#include <stdlib.h>
 #include <stdio.h>
+#include <slurm/spank.h>
+#include <string.h>
 #include "netns_spank.h"
 
-// /* Mock SPANK API functions not needed for this test */
-int spank_context(void) { return -1; }
-int spank_getenv(void *sp, const char *name, char *buf, int len) { return 0; }
+/* Mock SPANK API functions */
+spank_context_t spank_context (void) {
+    // use env variable to override context for testing
+    const char *env_val = getenv("SPANK_CONTEXT");
+    // if variable is 1, return S_CTX_REMOTE, else return 0
+    if (env_val && strcmp(env_val, "1") == 0) {
+        return S_CTX_REMOTE;
+    }
+    return S_CTX_REMOTE + 1;  // Return a non-remote context by default for testing
+}
+spank_err_t spank_getenv(spank_t sp, const char *var, char *buf, int len) {
 
-/* Forward declare the real function */
-int slurm_spank_init(void *sp, int ac, char **av);
+    // use getenv to get var from environment
+    const char *env_val = getenv(var);
+    if (env_val) {
+        strncpy(buf, env_val, len - 1);
+        buf[len - 1] = '\0';
+        return ESPANK_SUCCESS;
+    }
+    return ESPANK_SUCCESS;;
+}
 
-/*
- * Run a single test case
- */
-int test_slurm_spank_init(char **av, int ac, int expected_rc, const char *test_name)
-{
-    printf("\n>>> [%s] (expect = %d)\n", test_name, expected_rc);
-    int rc = slurm_spank_init(NULL, ac, av);
+/* Print test information */
+void print_test(const char *test_name, int expected_rc) {
+    printf("\n[TESTING: %s]\n", test_name);
+}
+
+/* Compare the actual return code to the expected return code and print pass/fail */
+int compare_rc(const char *test_name, int rc, int expected_rc) {
     if (rc == expected_rc) {
         printf("[PASS]\n");
         return 0;
     } else {
-        printf("[FAIL] %s (expected = %d  got = %d)\n",
-               test_name, expected_rc, rc);
+        printf("[FAIL] %s (expected = %d, got = %d)\n",
+                test_name, expected_rc, rc);
         return 1;
     }
 }
 
-int main(void)
+/*
+ * Run a single test case
+ */
+int test_slurm_spank_init(const char *test_name, char **av, int ac, int expected_rc)
+{
+    print_test(test_name, expected_rc);
+    int rc = slurm_spank_init(NULL, ac, av);
+    return compare_rc(test_name, rc, expected_rc);
+}
+
+/* Run all slurm_spank_init tests */
+int test_all_slurm_spank_init(void)
 {
     int failures = 0;
 
     printf("\n>>> Running netns_spank_init tests\n");
 
-    char *av3[] = {
-        "partition=test",
-        "netns=/var/run/netns/test"
-    };
-    failures += test_slurm_spank_init(av3, 2, 0, "Valid config test");
+    failures += test_slurm_spank_init("Valid config",
+        (char *[]) {
+            "partition=test",
+            "netns=/var/run/netns/test"
+        }, 2, 0);
 
-    char *av1[] = { NULL };
-    failures += test_slurm_spank_init(av1, 0, RC_MISSING_CONFIG, "Missing config test");
+    failures += test_slurm_spank_init("Missing config", (char *[]) {NULL}, 0, RC_MISSING_CONFIG);
 
-    char *av2[] = {
+    failures += test_slurm_spank_init("Unknown option", (char *[]) {
         "partition=test",
         "netns=/var/run/netns/test",
         "foo=bar"
-    };
-    failures += test_slurm_spank_init(av2, 3, RC_UNKNOWN_OPT, "Unknown option test");
+    }, 3, RC_UNKNOWN_OPT);
 
     printf("\nResult: %s (%d failures)\n",
-           failures == 0 ? "PASS" : "FAIL",
-           failures);
+            failures == 0 ? "PASS" : "FAIL",
+            failures);
 
     return failures;
+}
+
+int test_slurm_spank_task_init_privileged(const char *test_name, char **av, int expected_rc)
+{
+    int ac = 2;
+    print_test(test_name, expected_rc);
+    int rc = slurm_spank_task_init_privileged(NULL, ac, av);
+    return compare_rc(test_name, rc, expected_rc);
+}
+
+int test_all_slurm_spank_task_init_privileged(void)
+{
+    printf("\n>>> Running netns_spank_task_init_privileged tests\n");
+
+    // Set environment variable to simulate remote context for the test
+    setenv("SPANK_CONTEXT", "1", 1);  // Set back to remote context for remaining tests
+
+    // Set environment variable to match the partition for the test
+    setenv("SLURM_JOB_PARTITION", "test", 1);
+    int failures = 0;
+    char *av[] = {
+        "partition=test",
+        "netns=/var/run/netns/test"
+    };
+    slurm_spank_init(NULL, 2, av); // Initialize config for the test
+
+    // Expect failure due to no kernel support for namespaces in the test environment
+    failures += test_slurm_spank_task_init_privileged("setns fail", av, -9);
+
+    setenv("SPANK_CONTEXT", "0", 1);  // Ensure spank_context() returns non-remote context
+    test_slurm_spank_task_init_privileged("Not remote context", av, RC_NOT_REMOTE_CTX);
+    setenv("SPANK_CONTEXT", "1", 1);  // Set back to remote context for remaining tests
+
+    setenv("SLURM_JOB_PARTITION", "bad_parition_name", 1);
+    test_slurm_spank_task_init_privileged("Partition mismatch", av, RC_WRONG_PARTITION);
+    setenv("SLURM_JOB_PARTITION", "not_test", 1);
+
+
+    printf("\nResult: %s (%d failures)\n",
+        failures == 0 ? "PASS" : "FAIL",
+        failures);
+
+    return failures;
+}
+
+int main(void)
+{
+    int total_failures = 0;
+    total_failures += test_all_slurm_spank_init();
+    total_failures += test_all_slurm_spank_task_init_privileged();
+
+    printf("\n==== Summary =============================");
+    printf("\nOverall result: %s (%d total failures)\n",
+        total_failures == 0 ? "PASS" : "FAIL",
+        total_failures);
+    printf("==========================================\n");
+
+    return total_failures;
 }
