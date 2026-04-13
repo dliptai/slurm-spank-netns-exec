@@ -67,23 +67,15 @@ fi
 # create symlink as a "bad" netns
 ln -s $TEST_NS $TEST_NS.link
 
-run_test "Missing config" 1 "testpart" 1 "partition=testpart"
-
-run_test "Unknown config" 2 "testpart" 1 "partition=testpart netns=$TEST_NS UNKNOWN_OPTION=value"
-
-run_test "Not remote context" 3 "testpart" 0 "partition=testpart netns=$TEST_NS"
-
-run_test "Missing SLURM_JOB_PARTITION" 4 "" 1 "partition=testpart netns=$TEST_NS"
-
-run_test "Wrong SLURM_JOB_PARTITION" 5 "wrongpart" 1 "partition=testpart netns=$TEST_NS"
-
-run_test "Missing netns" 6 "testpart" 1 "partition=testpart netns=/tmp/nonexistent"
-
-run_test "Unopenable netns" 7 "testpart" 1 "partition=testpart netns=$TEST_NS.link"
-
-run_test "Netns path not owned by root" 8 "testpart" 1 "partition=testpart netns=$TEST_NS_NONROOT"
-
-run_test "setns() fail" 9 "testpart" 1 "partition=testpart netns=$FAKE_NETNS"
+run_test "Missing config"               1 "testpart"  1 "partition=testpart"
+run_test "Unknown config"               2 "testpart"  1 "partition=testpart netns=$TEST_NS UNKNOWN_OPTION=value"
+run_test "Not remote context"           3 "testpart"  0 "partition=testpart netns=$TEST_NS"
+run_test "Missing SLURM_JOB_PARTITION"  4 ""          1 "partition=testpart netns=$TEST_NS"
+run_test "Wrong SLURM_JOB_PARTITION"    5 "wrongpart" 1 "partition=testpart netns=$TEST_NS"
+run_test "Missing netns"                6 "testpart"  1 "partition=testpart netns=/tmp/nonexistent"
+run_test "Unopenable netns"             7 "testpart"  1 "partition=testpart netns=$TEST_NS.link"
+run_test "Netns path not owned by root" 8 "testpart"  1 "partition=testpart netns=$TEST_NS_NONROOT"
+run_test "setns() fail"                 9 "testpart"  1 "partition=testpart netns=$FAKE_NETNS"
 
 if [ "$REAL_NETNS" = "yes" ]; then
     # If we have real netns support, we can test successful case
