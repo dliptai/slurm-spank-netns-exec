@@ -4,16 +4,13 @@ SLURM_INCLUDE_DIR=/usr/include
 all: netns_spank.so
 
 netns_spank.so: netns_spank.c
-	$(CC) -I$(SLURM_INCLUDE_DIR) -std=gnu99 -Wall -fPIC -shared -o netns_spank.so netns_spank.c
+	$(CC) -I$(SLURM_INCLUDE_DIR) -std=gnu99 -Wall -fPIC -shared -o $@ $^
 
-tests: netns_spank.c tests.c
-	$(CC) -I$(SLURM_INCLUDE_DIR) -std=gnu99 -Wall -DDEBUG netns_spank.c tests.c -o tests -lslurm
-
-test: tests
-	@./tests
+test: netns_spank.c tests.c
+	$(CC) -I$(SLURM_INCLUDE_DIR) -std=gnu99 -Wall -Wextra -DDEBUG $^ -o $@ -lslurm
 
 clean:
-	rm -f netns_spank.o netns_spank.so tests
+	rm -f netns_spank.o netns_spank.so test
 
 print_example_conf:
 	@echo optional ${PWD}/netns_spank.so partition=partition_name netns=/var/run/netns/netns_name
