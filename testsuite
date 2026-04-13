@@ -45,15 +45,17 @@ function run_test {
     unset SPANK_CONTEXT
 }
 
+# -----------------------------------------------------
 # Setup:
-# Create a fake netns for testing. We won't actually use it, but we just need it to exist and be openable for the tests.
+
+# Create a fake netns file
 echo "Setting up fake test network namespaces..."
 FAKE_NETNS="/tmp/testns"
 TEST_NS_NONROOT="/tmp/testns_nonroot"
 touch $FAKE_NETNS $TEST_NS_NONROOT
 chown nobody $TEST_NS_NONROOT
 
-# if user is root and has iproute2 installed, set up a netns for testing
+# If user is root and has iproute2 installed, set up a real netns
 if [ "$(id -u)" -eq 0 ] && command -v ip &> /dev/null; then
     REAL_NETNS=yes
     echo "Setting up real test network namespaces..."
@@ -67,6 +69,8 @@ fi
 # create symlink as a "bad" netns
 ln -s $TEST_NS $TEST_NS.link
 
+# -----------------------------------------------------
+
 run_test "Missing config"               1 "testpart"  1 "partition=testpart"
 run_test "Unknown config"               2 "testpart"  1 "partition=testpart netns=$TEST_NS UNKNOWN_OPTION=value"
 run_test "Not remote context"           3 "testpart"  0 "partition=testpart netns=$TEST_NS"
@@ -76,16 +80,14 @@ run_test "Missing netns"                6 "testpart"  1 "partition=testpart netn
 run_test "Unopenable netns"             7 "testpart"  1 "partition=testpart netns=$TEST_NS.link"
 run_test "Netns path not owned by root" 8 "testpart"  1 "partition=testpart netns=$TEST_NS_NONROOT"
 run_test "setns() fail"                 9 "testpart"  1 "partition=testpart netns=$FAKE_NETNS"
-
+# If we have real netns support, we can test successful case
 if [ "$REAL_NETNS" = "yes" ]; then
-    # If we have real netns support, we can test successful case
     run_test "end-to-end" 0 "testpart" 1 "partition=testpart netns=$TEST_NS"
 fi
 
 # Cleanup
 if [ "$REAL_NETNS" = "yes" ]; then
     ip netns delete testns
-    ip netns delete testns_nonroot
 else
     rm $TEST_NS $TEST_NS_NONROOT $TEST_NS.link
 fi
