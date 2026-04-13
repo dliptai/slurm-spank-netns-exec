@@ -53,6 +53,7 @@ if [ "$(id -u)" -eq 0 ] && command -v ip &> /dev/null; then
     TEST_NS_NONROOT="/var/run/netns/testns_nonroot"
 else
     # Create a fake netns for testing. We won't actually use it, but we just need it to exist and be openable for the tests.
+    echo "Setting up fake test network namespaces..."
     REAL_NETNS=no
 
     TEST_NS="/tmp/testns"
