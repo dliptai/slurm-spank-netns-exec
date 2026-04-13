@@ -23,4 +23,11 @@ jobs:
       - name: Tests
         run: |
           make test
-          ./testsuite
+          sudo ./testsuite
+
+      - name: test ip netns
+        run: |
+          sudo apt-get install -y iproute2
+          sudo ip netns add testns
+          sudo ip netns exec testns ip addr
+          sudo ip netns del testns
