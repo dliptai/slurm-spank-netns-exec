@@ -44,14 +44,22 @@ function run_test {
 # if user is root and has iproute2 installed, set up a netns for testing
 if [ "$(id -u)" -eq 0 ] && command -v ip &> /dev/null; then
     REAL_NETNS=yes
-    echo "Setting up test network namespace..."
+    echo "Setting up test network namespaces..."
+
     ip netns add testns
     TEST_NS=/var/run/netns/testns
+
+    sudo -u nobody ip netns add testns_nonroot
+    TEST_NS_NONROOT="/var/run/netns/testns_nonroot"
 else
     # Create a fake netns for testing. We won't actually use it, but we just need it to exist and be openable for the tests.
     REAL_NETNS=no
+
     TEST_NS="/tmp/testns"
     touch $TEST_NS
+
+    TEST_NS_NONROOT="/tmp/testns_nonroot"
+    sudo -u nobody touch $TEST_NS_NONROOT
 fi
 
 run_test "Missing config" 1 "testpart" 1 "partition=testpart"
@@ -71,18 +79,16 @@ ln -s $TEST_NS $TEST_NS.link
 run_test "Unopenable netns" 7 "testpart" 1 "partition=testpart netns=$TEST_NS.link"
 rm $TEST_NS.link
 
-# Change ownership to trigger test fail
-chown nobody $TEST_NS
-run_test "Netns path not owned by root" 8 "testpart" 1 "partition=testpart netns=$TEST_NS"
-chown root $TEST_NS
+run_test "Netns path not owned by root" 8 "testpart" 1 "partition=testpart netns=$TEST_NS_NONROOT"
 
 run_test "setns() fail" 9 "testpart" 1 "partition=testpart netns=$TEST_NS"
 
 # Cleanup
 if [ "$REAL_NETNS" = "yes" ]; then
     ip netns delete testns
+    ip netns delete testns_nonroot
 else
-    rm $TEST_NS
+    rm $TEST_NS $TEST_NS_NONROOT
 fi
 
 echo "---------------------------------"
