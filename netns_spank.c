@@ -129,7 +129,7 @@ int slurm_spank_task_init_privileged(spank_t sp, int ac, char **av)
 
     if (spank_context() != S_CTX_REMOTE) {
         slurm_verbose("netns_spank: skipping - not running in remote task context");
-        return RC_REMOTE_CTX;
+        return RC_NOT_REMOTE_CTX;
     }
 
     /* Check partition */
@@ -139,7 +139,7 @@ int slurm_spank_task_init_privileged(spank_t sp, int ac, char **av)
         return RC_GETENV_FAIL;
     }
     if (strncmp(job_partition, cfg_partition, PARTNAME_MAX) != 0)
-        return 0;  /* not our partition */
+        return RC_WRONG_PARTITION;  /* not our partition */
 
     /*
      * Open the namespace file with secure flags:
@@ -154,17 +154,17 @@ int slurm_spank_task_init_privileged(spank_t sp, int ac, char **av)
                         "job will run in default namespace. "
                         "Has the namespace been created on this node?",
                         cfg_netns);
-            return RC_NS_ENOENT;
+            return RC_NO_NAMESPACE;
         }
         slurm_error("netns_spank: open(%s): %m", cfg_netns);
-        return RC_OPEN_FAIL;
+        return RC_NAMESPACE_OPEN_FAIL;
     }
 
     struct stat st;
     if (fstat(fd, &st) < 0 || st.st_uid != 0) {
         slurm_error("netns_spank: namespace not owned by root!");
         close(fd);
-        return RC_FSTAT_FAIL;
+        return RC_NAMESPACE_NOT_ROOT;
     }
 
     /*
