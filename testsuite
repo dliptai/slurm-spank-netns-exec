@@ -41,35 +41,49 @@ function run_test {
     unset SPANK_CONTEXT
 }
 
-# Create a fake netns for testing. We won't actually use it, but we just need it to exist and be openable for the tests.
-touch /tmp/testns
+# if user is root and has iproute2 installed, set up a netns for testing
+if [ "$(id -u)" -eq 0 ] && command -v ip &> /dev/null; then
+    REAL_NETNS=yes
+    echo "Setting up test network namespace..."
+    ip netns add testns
+    TEST_NS=/var/run/netns/testns
+else
+    # Create a fake netns for testing. We won't actually use it, but we just need it to exist and be openable for the tests.
+    REAL_NETNS=no
+    TEST_NS="/tmp/testns"
+    touch $TEST_NS
+fi
 
 run_test "Missing config" 1 "testpart" 1 "partition=testpart"
 
-run_test "Unknown config" 2 "testpart" 1 "partition=testpart netns=/tmp/testns UNKNOWN_OPTION=value"
+run_test "Unknown config" 2 "testpart" 1 "partition=testpart netns=$TEST_NS UNKNOWN_OPTION=value"
 
-run_test "Not remote context" 3 "testpart" 0 "partition=testpart netns=/tmp/testns"
+run_test "Not remote context" 3 "testpart" 0 "partition=testpart netns=$TEST_NS"
 
-run_test "Missing SLURM_JOB_PARTITION" 4 "" 1 "partition=testpart netns=/tmp/testns"
+run_test "Missing SLURM_JOB_PARTITION" 4 "" 1 "partition=testpart netns=$TEST_NS"
 
-run_test "Wrong SLURM_JOB_PARTITION" 5 "wrongpart" 1 "partition=testpart netns=/tmp/testns"
+run_test "Wrong SLURM_JOB_PARTITION" 5 "wrongpart" 1 "partition=testpart netns=$TEST_NS"
 
 run_test "Missing netns" 6 "testpart" 1 "partition=testpart netns=/tmp/nonexistent"
 
 # Use a symlink to trigger test fail
-ln -s /tmp/testns /tmp/testns.link
-run_test "Unopenable netns" 7 "testpart" 1 "partition=testpart netns=/tmp/testns.link"
-rm /tmp/testns.link
+ln -s $TEST_NS $TEST_NS.link
+run_test "Unopenable netns" 7 "testpart" 1 "partition=testpart netns=$TEST_NS.link"
+rm $TEST_NS.link
 
 # Change ownership to trigger test fail
-chown nobody /tmp/testns
-run_test "Netns path not owned by root" 8 "testpart" 1 "partition=testpart netns=/tmp/testns"
-chown root /tmp/testns
+chown nobody $TEST_NS
+run_test "Netns path not owned by root" 8 "testpart" 1 "partition=testpart netns=$TEST_NS"
+chown root $TEST_NS
 
-run_test "setns() fail" 9 "testpart" 1 "partition=testpart netns=/tmp/testns"
+run_test "setns() fail" 9 "testpart" 1 "partition=testpart netns=$TEST_NS"
 
 # Cleanup
-rm /tmp/testns
+if [ "$REAL_NETNS" = "yes" ]; then
+    ip netns delete testns
+else
+    rm $TEST_NS
+fi
 
 echo "---------------------------------"
 echo "Total failed tests: $failed_tests"
