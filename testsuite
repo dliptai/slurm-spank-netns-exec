@@ -74,3 +74,5 @@ rm /tmp/testns
 echo "---------------------------------"
 echo "Total failed tests: $failed_tests"
 echo "---------------------------------"
+
+exit $failed_tests
