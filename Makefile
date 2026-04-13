@@ -6,7 +6,7 @@ all: netns_spank.so
 netns_spank.so: netns_spank.c
 	$(CC) -I$(SLURM_INCLUDE_DIR) -std=gnu99 -Wall -fPIC -shared -o $@ $^
 
-test: netns_spank.c tests.c
+test: netns_spank.c test.c
 	$(CC) -I$(SLURM_INCLUDE_DIR) -std=gnu99 -Wall -Wextra -DDEBUG $^ -o $@ -lslurm
 
 clean:
@@ -19,7 +19,7 @@ help:
 	@echo "Usage: make [target]"
 	@echo "Targets:"
 	@echo "  all                 Build the netns_spank.so plugin"
-	@echo "  test                Run unit tests"
+	@echo "  test                Build test binary"
 	@echo "  clean               Remove build artifacts"
 	@echo "  print_example_conf  Print an example plugstack.conf line for this plugin"
 	@echo "  help                Show this help message"
