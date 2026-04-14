@@ -26,6 +26,8 @@ jobs:
       - name: Run tests
         run: |
           set +e
+          set -u
+
           test_bin="./test"
 
           failed_tests=0
@@ -85,7 +87,7 @@ jobs:
           sudo ip netns add $NSNAME
 
           # Create symlink as a "bad" netns
-          sudo ln -s $NETS_REAL_ROOT $NETS_SYMLINK
+          sudo ln -s $NETS_REAL_ROOT $NETNS_SYMLINK
 
           # -----------------------------------------------------
 
@@ -96,7 +98,7 @@ jobs:
           run_test "Missing SLURM_JOB_PARTITION"  4 ""          1 "partition=testpart netns=$NETS_REAL_ROOT"
           run_test "Wrong SLURM_JOB_PARTITION"    5 "wrongpart" 1 "partition=testpart netns=$NETS_REAL_ROOT"
           run_test "Missing netns"                6 "testpart"  1 "partition=testpart netns=/tmp/nonexistent"
-          run_test "Unopenable netns"             7 "testpart"  1 "partition=testpart netns=$NETS_SYMLINK"
+          run_test "Unopenable netns"             7 "testpart"  1 "partition=testpart netns=$NETNS_SYMLINK"
           run_test "Netns path not owned by root" 8 "testpart"  1 "partition=testpart netns=$NETS_FAKE_NONROOT"
           run_test "setns() fail"                 9 "testpart"  1 "partition=testpart netns=$NETS_FAKE_ROOT"
 
