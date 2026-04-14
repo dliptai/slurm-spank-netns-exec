@@ -48,7 +48,7 @@ spank_err_t spank_getenv(spank_t sp, const char *var, char *buf, int len) {
 
     size_t n = strnlen(val, len - 1);
     memcpy(buf, val, n);
-    dst[n] = '\0';
+    buf[n] = '\0';
     return ESPANK_SUCCESS;
 }
 
