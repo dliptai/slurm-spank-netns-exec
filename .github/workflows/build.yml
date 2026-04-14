@@ -37,7 +37,7 @@ jobs:
 
           # Create a symlink to the real netns
           SYMLINK_NETNS="${REAL_NETNS}.link"
-          ln -vs "$REAL_NETNS" "$SYMLINK_NETNS"
+          sudo ln -vs "$REAL_NETNS" "$SYMLINK_NETNS"
 
           # Export for subsequent steps
           echo "FAKE_NETNS_ROOT=$FAKE_NETNS_ROOT"         >> "$GITHUB_ENV"
