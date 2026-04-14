@@ -46,20 +46,9 @@ spank_err_t spank_getenv(spank_t sp, const char *var, char *buf, int len) {
     if (!val)
         return ESPANK_ENV_NOEXIST;
 
-    size_t n = strlen(val);
-
-    // Always null-terminate if buffer is usable
-    if (len > 0)
-        buf[0] = '\0';
-
-    if ((int)n >= len) {
-        // Truncate
-        memcpy(buf, val, len - 1);
-        buf[len - 1] = '\0';
-        return ESPANK_NOSPACE;
-    }
-
-    memcpy(buf, val, n + 1);  // include null terminator
+    size_t n = strnlen(val, len - 1);
+    memcpy(buf, val, n);
+    dst[n] = '\0';
     return ESPANK_SUCCESS;
 }
 
