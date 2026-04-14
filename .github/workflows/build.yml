@@ -25,6 +25,7 @@ jobs:
 
       - name: Run tests
         run: |
+          set +e
           test_bin="./test"
 
           failed_tests=0
