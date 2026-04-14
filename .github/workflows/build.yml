@@ -59,11 +59,11 @@ jobs:
                       echo "(no output)"
                   fi
                   echo "FAIL: $test_name (expected rc: $expected_rc, actual rc: $actual_rc)"
-                  echo
+                  echo ""
                   failed_tests=$((failed_tests + 1))
               fi
 
-              echo
+              echo ""
 
               unset SLURM_JOB_PARTITION
               unset SPANK_CONTEXT
