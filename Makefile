@@ -24,4 +24,4 @@ help:
 	@echo "  print_example_conf  Print an example plugstack.conf line for this plugin"
 	@echo "  help                Show this help message"
 
-.PHONY: all clean test print_example_conf help
+.PHONY: all clean print_example_conf help

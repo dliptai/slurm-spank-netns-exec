@@ -20,7 +20,87 @@ jobs:
       - name: Clean
         run: make clean
 
-      - name: Tests
+      - name: Build test
+        run: make test
+
+      - name: Set up test network namespaces
         run: |
-          make test
-          sudo ./testsuite
+          # Create fake netns, one owned by root and one by non-root
+          FAKE_NETNS_ROOT="/tmp/testns"
+          FAKE_NETNS_NONROOT="/tmp/testns_nonroot"
+          touch "$FAKE_NETNS_ROOT" "$FAKE_NETNS_NONROOT"
+          sudo chown nobody "$FAKE_NETNS_NONROOT"
+
+          # Create a real netns
+          sudo ip netns add testns
+          REAL_NETNS=/var/run/netns/testns
+
+          # Create a symlink to the real netns
+          SYMLINK_NETNS="${REAL_NETNS}.link"
+          ln -vs "$REAL_NETNS" "$SYMLINK_NETNS"
+
+          # Export for subsequent steps
+          echo "FAKE_NETNS_ROOT=$FAKE_NETNS_ROOT"         >> "$GITHUB_ENV"
+          echo "REAL_NETNS=$REAL_NETNS"                   >> "$GITHUB_ENV"
+          echo "SYMLINK_NETNS=$SYMLINK_NETNS"             >> "$GITHUB_ENV"
+          echo "FAKE_NETNS_NONROOT=$FAKE_NETNS_NONROOT"   >> "$GITHUB_ENV"
+
+      - name: Run tests
+        id: run_tests
+        run: |
+          failed_tests=0
+
+          run_test() {
+            local test_name="$1"
+            local expected_rc="$2"
+            local slurm_job_partition="$3"
+            local spank_context="$4"
+            local config_string="$5"
+
+            echo "[TEST: $test_name, expect rc = $expected_rc]"
+
+            if [ -n "$slurm_job_partition" ]; then
+              export SLURM_JOB_PARTITION="$slurm_job_partition"
+            fi
+            export SPANK_CONTEXT="$spank_context"
+
+            output=$(sudo --preserve-env=SLURM_JOB_PARTITION,SPANK_CONTEXT ./test $config_string 2>&1)
+            local actual_rc="$?"
+
+            if [ "$actual_rc" -eq "$expected_rc" ]; then
+              echo "Pass"
+            else
+              echo "Log:"
+              if [ -n "$output" ]; then
+                echo "++++"
+                echo "$output"
+                echo "++++"
+              else
+                echo "(no output)"
+              fi
+              echo "FAIL: $test_name (expected rc: $expected_rc, actual rc: $actual_rc)"
+              echo
+              failed_tests=$((failed_tests + 1))
+            fi
+            echo
+
+            unset SLURM_JOB_PARTITION
+            unset SPANK_CONTEXT
+          }
+
+          run_test "end-to-end"                   0 "testpart"   1 "partition=testpart netns=$REAL_NETNS"
+          run_test "Missing config"               1 "testpart"   1 "partition=testpart"
+          run_test "Unknown config"               2 "testpart"   1 "partition=testpart netns=$REAL_NETNS UNKNOWN_OPTION=value"
+          run_test "Not remote context"           3 "testpart"   0 "partition=testpart netns=$REAL_NETNS"
+          run_test "Missing SLURM_JOB_PARTITION"  4 ""           1 "partition=testpart netns=$REAL_NETNS"
+          run_test "Wrong SLURM_JOB_PARTITION"    5 "wrongpart"  1 "partition=testpart netns=$REAL_NETNS"
+          run_test "Missing netns"                6 "testpart"   1 "partition=testpart netns=/tmp/nonexistent"
+          run_test "Unopenable netns"             7 "testpart"   1 "partition=testpart netns=${REAL_NETNS}.link"
+          run_test "Netns path not owned by root" 8 "testpart"   1 "partition=testpart netns=$FAKE_NETNS_NONROOT"
+          run_test "setns() fail"                 9 "testpart"   1 "partition=testpart netns=$FAKE_NETNS_ROOT"
+
+          echo "---------------------------------"
+          echo "Total failed tests: $failed_tests"
+          echo "---------------------------------"
+
+          exit $failed_tests
