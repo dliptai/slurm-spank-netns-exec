@@ -40,3 +40,30 @@ Register in /etc/slurm/plugstack.conf:
 ```
 optional <SLURM_LIB_DIR>/netns_spank.so partition=<p> netns=<ns>
 ```
+
+## Testing
+To compile the `test` binary run
+```
+make test
+```
+The binary takes a slurm spank config string as an argument, e.g. `./test partition=test netns=/var/run/netns/testns`.
+It then calls `slurm_spank_init()` with the provided config, followed by `slurm_spank_task_init_privileged()`.
+
+For testing we implement mock `spank_context()` and `spank_getenv()` functions.
+The mock `spank_context()` uses the environment variable `SPANK_CONTEXT` to return `S_CTX_REMOTE` if `SPANK_CONTEXT=1`, else returns `S_CTX_LOCAL`.
+The mock `spank_getenv()` simply returns local environment variables.
+
+### Test suite:
+A simple test suite runs in GitHub actions. The `test` binary is run with different combinations of configurations/options, comparing the return code each time with an expected return code. It also creates real and fake network namespaces, and sets environment variables between tests.
+
+The following tests are implemented:
+- end-to-end
+- Missing config
+- Unknown config
+- Not remote context
+- Missing SLURM_JOB_PARTITION
+- Wrong SLURM_JOB_PARTITION
+- Missing netns
+- Unopenable netns
+- Netns path not owned by root
+- setns() fail
