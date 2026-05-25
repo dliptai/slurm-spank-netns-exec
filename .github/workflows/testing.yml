@@ -98,8 +98,18 @@ jobs:
           sudo touch $MNTNS_FAKE_ROOT $MNTNS_FAKE_NONROOT
           sudo chown nobody $MNTNS_FAKE_NONROOT
 
-          # Set up a real mount namespace file
-          sudo touch $MNTNS_REAL
+          # Create directory usable for pinning mount-namespaces
+          sudo mkdir -p /var/run/mntns/
+          sudo mount --make-rslave /var/run/mntns /var/run/mntns
+
+          # Create a mount point
+          sudo touch /var/run/mntns/${NSNAME}
+
+          # Enter our pre-created netns using 'ip netns exec', which sets up a temporary mount namespace and mounts things from /etc/netns/, and remounts /sys.
+          # Then escape that mount namespace, and enter the parent mount namespace instead.
+          # Finally, use a bind mount to pin the temporary mount namespace created by 'ip', to make it persistent.
+          # Note: we must have 'bash -c' trigger a fork() here, so the command is intentionally not "simple", to prevent optimisation. i.e. multiple commands, (where ':' is the POSIX null utility).
+          sudo ip netns exec $NSNAME bash -c "nsenter --mount -t $$ mount --bind /proc/\$\$/ns/mnt /var/run/mntns/${NSNAME} && :"
 
           # -----------------------------------------------------
 
