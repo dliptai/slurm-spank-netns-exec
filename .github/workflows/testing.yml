@@ -79,6 +79,10 @@ jobs:
           NETS_REAL_ROOT="/var/run/netns/${NSNAME}"
           NETNS_SYMLINK="/var/run/netns/${NSNAME}.link"
 
+          MNTS_FAKE_ROOT="/tmp/${NSNAME}_mnt"
+          MNTS_FAKE_NONROOT="/tmp/${NSNAME}_mnt_nonroot"
+          MNTS_REAL="/var/run/mntns/${NSNAME}"
+
           # Set up fake network namespaces (both owned by root and non-root)
           sudo touch $NETS_FAKE_ROOT $NETS_FAKE_NONROOT
           sudo chown nobody $NETS_FAKE_NONROOT
@@ -89,21 +93,35 @@ jobs:
           # Create symlink as a "bad" netns
           sudo ln -s $NETS_REAL_ROOT $NETNS_SYMLINK
 
+          # Set up fake mount namespace files (both owned by root and non-root)
+          sudo mkdir -p /var/run/mntns
+          sudo touch $MNTS_FAKE_ROOT $MNTS_FAKE_NONROOT
+          sudo chown nobody $MNTS_FAKE_NONROOT
+
+          # Set up a real mount namespace file
+          sudo touch $MNTS_REAL
+
           # -----------------------------------------------------
 
-          run_test "end-to-end"                   0 "testpart"  1 "partition=testpart netns=$NETS_REAL_ROOT"
+          run_test "end-to-end"                   0 "testpart"  1 "partition=testpart netns=$NETS_REAL_ROOT mntns=$MNTS_REAL"
           run_test "Missing config"               1 "testpart"  1 "partition=testpart"
-          run_test "Unknown config"               2 "testpart"  1 "partition=testpart netns=$NETS_REAL_ROOT UNKNOWN_OPTION=value"
-          run_test "Not remote context"           3 "testpart"  0 "partition=testpart netns=$NETS_REAL_ROOT"
-          run_test "Missing SLURM_JOB_PARTITION"  4 ""          1 "partition=testpart netns=$NETS_REAL_ROOT"
-          run_test "Wrong SLURM_JOB_PARTITION"    5 "wrongpart" 1 "partition=testpart netns=$NETS_REAL_ROOT"
-          run_test "Missing netns"                6 "testpart"  1 "partition=testpart netns=/tmp/nonexistent"
-          run_test "Unopenable netns"             7 "testpart"  1 "partition=testpart netns=$NETNS_SYMLINK"
-          run_test "Netns path not owned by root" 8 "testpart"  1 "partition=testpart netns=$NETS_FAKE_NONROOT"
-          run_test "setns() fail"                 9 "testpart"  1 "partition=testpart netns=$NETS_FAKE_ROOT"
+          run_test "Unknown config"               2 "testpart"  1 "partition=testpart netns=$NETS_REAL_ROOT mntns=$MNTS_REAL UNKNOWN_OPTION=value"
+          run_test "Not remote context"           3 "testpart"  0 "partition=testpart netns=$NETS_REAL_ROOT mntns=$MNTS_REAL"
+          run_test "Missing SLURM_JOB_PARTITION"  4 ""          1 "partition=testpart netns=$NETS_REAL_ROOT mntns=$MNTS_REAL"
+          run_test "Wrong SLURM_JOB_PARTITION"    5 "wrongpart" 1 "partition=testpart netns=$NETS_REAL_ROOT mntns=$MNTS_REAL"
+          run_test "Missing netns"                6 "testpart"  1 "partition=testpart netns=/tmp/nonexistent mntns=$MNTS_REAL"
+          run_test "Unopenable netns"             7 "testpart"  1 "partition=testpart netns=$NETNS_SYMLINK mntns=$MNTS_REAL"
+          run_test "Netns path not owned by root" 8 "testpart"  1 "partition=testpart netns=$NETS_FAKE_NONROOT mntns=$MNTS_REAL"
+          run_test "setns() fail (netns)"        9 "testpart"  1 "partition=testpart netns=$NETS_FAKE_ROOT mntns=$MNTS_REAL"
+          run_test "Missing mntns"               10 "testpart" 1 "partition=testpart netns=$NETS_REAL_ROOT"
+          run_test "Unopenable mntns"            11 "testpart" 1 "partition=testpart netns=$NETS_REAL_ROOT mntns=/tmp/nonexistent_mnt"
+          run_test "Mntns path not owned by root" 12 "testpart" 1 "partition=testpart netns=$NETS_REAL_ROOT mntns=$MNTS_FAKE_NONROOT"
+          run_test "setns() fail (mntns)"        13 "testpart" 1 "partition=testpart netns=$NETS_REAL_ROOT mntns=$MNTS_FAKE_ROOT"
 
           # Cleanup
           sudo ip netns delete $NSNAME
+          sudo rm -f $MNTS_REAL $MNTS_FAKE_ROOT $MNTS_FAKE_NONROOT
+          sudo rm -rf /var/run/mntns
 
           echo "---------------------------------"
           echo "Total failed tests: $failed_tests"

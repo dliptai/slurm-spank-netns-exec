@@ -129,7 +129,6 @@ int slurm_spank_init(spank_t sp, int ac, char **av)
  *   ns_path   - Path to the namespace file
  *   ns_type   - Namespace type (e.g., CLONE_NEWNET, CLONE_NEWNS)
  *
- * Returns 0 on success, -1 on failure.
  * ========================================================================= */
 static int enter_namespace(const char *ns_path, int ns_type)
 {
@@ -146,10 +145,9 @@ static int enter_namespace(const char *ns_path, int ns_type)
         case CLONE_NEWUSER:   strncpy(ns_name, "user", sizeof(ns_name) - 1); break;
         case CLONE_NEWUTS:    strncpy(ns_name, "uts", sizeof(ns_name) - 1); break;
         default:
-            slurm_error("netns_spank: invalid namespace type %d for %s namespace", ns_type, ns_name);
+            slurm_error("netns_spank: invalid namespace type %d", ns_type);
             return RC_UNKNOWN_NS_TYPE;
     }
-    ns_name[sizeof(ns_name) - 1] = '\0';
 
     /*
      * Open the namespace file with secure flags:
@@ -234,6 +232,6 @@ int slurm_spank_task_init_privileged(spank_t sp, int ac, char **av)
     rc = enter_namespace(cfg_mntns, CLONE_NEWNS);
     if (rc > 0) { return rc; }
 
-    slurm_verbose("netns_spank: task entered network namespace '%s' and mount namespace '%s'", cfg_netns, cfg_mntns);
+    slurm_verbose("netns_spank: namespace setup complete for job in partition '%s'", job_partition);
     return 0;
 }
