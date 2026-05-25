@@ -11,7 +11,7 @@
 #define RC_NAMESPACE_OPEN_FAIL 7
 #define RC_NAMESPACE_NOT_ROOT 8
 #define RC_SETNS_FAIL 9
-#define RC_UNKNOWN_NS_TYPE 13
+#define RC_UNKNOWN_NS_TYPE 10
 
 // Redefine logging macros to print to stdout/stderr for testing
 #ifdef slurm_verbose
