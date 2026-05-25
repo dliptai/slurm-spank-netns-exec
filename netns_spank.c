@@ -180,7 +180,7 @@ static int enter_namespace(const char *ns_path, int ns_type)
      * The namespace is inherited across the subsequent become_user() and execve().
      */
     if (setns(fd, ns_type) < 0) {
-        slurm_error("netns_spank: setns %s(%s): %m", ns_name, ns_path);
+        slurm_error("netns_spank: setns(%s, '%s'): %m", ns_path, ns_name);
         close(fd);
         return RC_SETNS_FAIL;
     }
