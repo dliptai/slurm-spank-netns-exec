@@ -11,6 +11,19 @@
 #define RC_NAMESPACE_OPEN_FAIL 7
 #define RC_NAMESPACE_NOT_ROOT 8
 #define RC_SETNS_FAIL 9
+#define RC_UNKNOWN_NS_TYPE 13
+
+// Redefine logging macros to print to stdout/stderr for testing
+#ifdef slurm_verbose
+#undef slurm_verbose
+#endif
+#define slurm_verbose(...) fprintf(stdout, __VA_ARGS__), fprintf(stdout, "\n")
+
+#ifdef slurm_error
+#undef slurm_error
+#endif
+#define slurm_error(...) fprintf(stderr, __VA_ARGS__), fprintf(stderr, "\n")
+
 #else
 #define RC_MISSING_CONFIG 1      /* Always fail on config error */
 #define RC_UNKNOWN_OPT 1         /* Always fail on unknown option */
@@ -21,4 +34,5 @@
 #define RC_NAMESPACE_OPEN_FAIL 0  /* Graceful skip */
 #define RC_NAMESPACE_NOT_ROOT 0   /* Graceful skip */
 #define RC_SETNS_FAIL 0           /* Graceful skip */
+#define RC_UNKNOWN_NS_TYPE 1      /* Always fail on unknown namespace type */
 #endif
