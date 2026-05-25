@@ -25,14 +25,12 @@ jobs:
 
       - name: Run tests
         run: |
-          set +e
           set -u
-
-          test_bin="./test"
 
           failed_tests=0
 
           function run_test {
+              set +e
               local test_name="$1"
               local expected_rc="$2"
               local slurm_job_partition="$3"
@@ -69,69 +67,52 @@ jobs:
 
               unset SLURM_JOB_PARTITION
               unset SPANK_CONTEXT
+              set -e
           }
 
           # -----------------------------------------------------
           # Setup:
-          NSNAME=testns
-          NETNS_FAKE_ROOT="/tmp/${NSNAME}"
-          NETNS_FAKE_NONROOT="/tmp/${NSNAME}_nonroot"
-          NETNS_REAL_ROOT="/var/run/netns/${NSNAME}"
-          NETNS_SYMLINK="/var/run/netns/${NSNAME}.link"
-
-          MNTNS_FAKE_ROOT="/tmp/${NSNAME}_mnt"
-          MNTNS_FAKE_NONROOT="/tmp/${NSNAME}_mnt_nonroot"
-          MNTNS_REAL="/var/run/mntns/${NSNAME}"
-
-          # Set up fake network namespaces (both owned by root and non-root)
-          sudo touch $NETNS_FAKE_ROOT $NETNS_FAKE_NONROOT
-          sudo chown nobody $NETNS_FAKE_NONROOT
 
           # Set up a real network namespace
-          sudo ip netns add $NSNAME
+          sudo ip netns add test
 
-          # Create symlink as a "bad" netns
-          sudo ln -s $NETNS_REAL_ROOT $NETNS_SYMLINK
+          # Set up fake 'network namespace' files
+          sudo touch /tmp/test
+          touch /tmp/ns_nonroot && sudo chown nobody /tmp/ns_nonroot
+          sudo ln -s /var/run/netns/test /var/run/netns/test.link
 
-          # Set up fake mount namespace files (both owned by root and non-root)
-          sudo mkdir -p /var/run/mntns
-          sudo touch $MNTNS_FAKE_ROOT $MNTNS_FAKE_NONROOT
-          sudo chown nobody $MNTNS_FAKE_NONROOT
+          # Create directory usable for pinning mount-namespaces, and create an empty mount point
+          sudo mkdir -p /run/mntns
+          sudo mount --make-rslave --bind /run/mntns /run/mntns
+          sudo touch /run/mntns/test
 
-          # Create directory usable for pinning mount-namespaces
-          sudo mkdir -p /var/run/mntns/
-          sudo mount --make-rslave /var/run/mntns /var/run/mntns
-
-          # Create a mount point
-          sudo touch /var/run/mntns/${NSNAME}
+          # Ensure there is a non-existent path for testing missing netns
+          sudo rm -f /tmp/nonexistent
 
           # Enter our pre-created netns using 'ip netns exec', which sets up a temporary mount namespace and mounts things from /etc/netns/, and remounts /sys.
           # Then escape that mount namespace, and enter the parent mount namespace instead.
           # Finally, use a bind mount to pin the temporary mount namespace created by 'ip', to make it persistent.
           # Note: we must have 'bash -c' trigger a fork() here, so the command is intentionally not "simple", to prevent optimisation. i.e. multiple commands, (where ':' is the POSIX null utility).
-          sudo ip netns exec $NSNAME bash -c "nsenter --mount -t $$ mount --bind /proc/\$\$/ns/mnt /var/run/mntns/${NSNAME} && :"
+          sudo ip netns exec test bash -c "nsenter --mount -t $$ mount --bind /proc/\$\$/ns/mnt /run/mntns/test && :"
 
           # -----------------------------------------------------
 
-          run_test "end-to-end"                   0 "testpart"  1 "partition=testpart netns=$NETNS_REAL_ROOT mntns=$MNTNS_REAL"
+          run_test "end-to-end"                   0 "testpart"  1 "partition=testpart netns=/var/run/netns/test      mntns=/run/mntns/test"
           run_test "Missing config"               1 "testpart"  1 "partition=testpart"
-          run_test "Unknown config"               2 "testpart"  1 "partition=testpart netns=$NETNS_REAL_ROOT mntns=$MNTNS_REAL UNKNOWN_OPTION=value"
-          run_test "Not remote context"           3 "testpart"  0 "partition=testpart netns=$NETNS_REAL_ROOT mntns=$MNTNS_REAL"
-          run_test "Missing SLURM_JOB_PARTITION"  4 ""          1 "partition=testpart netns=$NETNS_REAL_ROOT mntns=$MNTNS_REAL"
-          run_test "Wrong SLURM_JOB_PARTITION"    5 "wrongpart" 1 "partition=testpart netns=$NETNS_REAL_ROOT mntns=$MNTNS_REAL"
-          run_test "Missing netns"                6 "testpart"  1 "partition=testpart netns=/tmp/nonexistent mntns=$MNTNS_REAL"
-          run_test "Unopenable netns"             7 "testpart"  1 "partition=testpart netns=$NETNS_SYMLINK mntns=$MNTNS_REAL"
-          run_test "Netns path not owned by root" 8 "testpart"  1 "partition=testpart netns=$NETNS_FAKE_NONROOT mntns=$MNTNS_REAL"
-          run_test "setns() fail (netns)"         9 "testpart"  1 "partition=testpart netns=$NETNS_FAKE_ROOT mntns=$MNTNS_REAL"
-          run_test "Missing mntns"                1 "testpart" 1 "partition=testpart netns=$NETNS_REAL_ROOT"
-          run_test "Unopenable mntns"             7 "testpart" 1 "partition=testpart netns=$NETNS_REAL_ROOT mntns=/tmp/nonexistent_mnt"
-          run_test "Mntns path not owned by root" 8 "testpart" 1 "partition=testpart netns=$NETNS_REAL_ROOT mntns=$MNTNS_FAKE_NONROOT"
-          run_test "setns() fail (mntns)"         9 "testpart" 1 "partition=testpart netns=$NETNS_REAL_ROOT mntns=$MNTNS_FAKE_ROOT"
+          run_test "Unknown config"               2 "testpart"  1 "partition=testpart netns=/var/run/netns/test      mntns=/run/mntns/test UNKNOWN_OPTION=value"
+          run_test "Not remote context"           3 "testpart"  0 "partition=testpart netns=/var/run/netns/test      mntns=/run/mntns/test"
+          run_test "Missing SLURM_JOB_PARTITION"  4 ""          1 "partition=testpart netns=/var/run/netns/test      mntns=/run/mntns/test"
+          run_test "Wrong SLURM_JOB_PARTITION"    5 "wrongpart" 1 "partition=testpart netns=/var/run/netns/test      mntns=/run/mntns/test"
+          run_test "Missing netns"                6 "testpart"  1 "partition=testpart netns=/tmp/nonexistent         mntns=/run/mntns/test"
+          run_test "Unopenable netns"             7 "testpart"  1 "partition=testpart netns=/var/run/netns/test.link mntns=/run/mntns/test"
+          run_test "Netns path not owned by root" 8 "testpart"  1 "partition=testpart netns=/tmp/ns_nonroot          mntns=/run/mntns/test"
+          run_test "setns() fail"                 9 "testpart"  1 "partition=testpart netns=/tmp/test                mntns=/run/mntns/test"
 
           # Cleanup
-          sudo ip netns delete $NSNAME
-          sudo rm -f $MNTNS_REAL $MNTNS_FAKE_ROOT $MNTNS_FAKE_NONROOT
-          sudo rm -rf /var/run/mntns
+          sudo ip netns delete test
+          sudo umount /run/mntns/test
+          sudo umount /run/mntns
+          sudo rm -rf /run/mntns
 
           echo "---------------------------------"
           echo "Total failed tests: $failed_tests"
