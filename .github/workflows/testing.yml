@@ -92,7 +92,7 @@ jobs:
           # Enter our pre-created netns using 'ip netns exec', which sets up a temporary mount namespace and mounts things from /etc/netns/, and remounts /sys.
           # Then escape that mount namespace, and enter the parent mount namespace instead.
           # Finally, use a bind mount to pin the temporary mount namespace created by 'ip', to make it persistent.
-          # Note: we must have 'bash -c' trigger a fork() here, so the command is intentionally not "simple", to prevent optimisation. i.e. multiple commands, (where ':' is the POSIX null utility).
+          # Note: we use 'bash -c' to trigger a fork(2). As `bash` may optimise away forks for 'simple' commands, the `&& :` ensures it does fork
           sudo ip netns exec test bash -c "nsenter --mount -t $$ mount --bind /proc/\$\$/ns/mnt /run/mntns/test && :"
 
           # -----------------------------------------------------
