@@ -277,7 +277,7 @@ int namespace_plugin(spank_t sp, int ac, char **av)
 
 /* ===========================================================================
  * Configuration and setup errors are logged but gracefully skipped so the job
- * runs in the default namespace. Only true plugin errors are fatal.
+ * runs in the default namespace. Only slurm_spank_init() errors are fatal.
  * ========================================================================= */
 int slurm_spank_init_post_opt(spank_t sp, int ac, char **av)
 {
