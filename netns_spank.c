@@ -227,6 +227,16 @@ int namespace_plugin(spank_t sp, int ac, char **av)
     /* Suppress unused parameter warnings */
     (void)ac; (void)av;
 
+    if ( entered_netns == 1 ) {
+        slurm_verbose("netns_spank: already entered network namespace, skipping");
+        return 0;
+    }
+
+    if ( entered_mntns == 1 ) {
+        slurm_verbose("netns_spank: already entered mount namespace, skipping");
+        return 0;
+    }
+
     if (spank_context() != S_CTX_REMOTE) {
         slurm_verbose("netns_spank: skipping - not running in remote task context");
         return RC_NOT_REMOTE_CTX;
