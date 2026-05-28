@@ -264,6 +264,7 @@ int namespace_plugin(spank_t sp, int ac, char **av)
     /* Enter mount namespace */
     rc = enter_namespace(cfg_mntns, CLONE_NEWNS);
     if (rc > 0) {
+        slurm_verbose("netns_spank: failed to enter mount namespace");
         return rc;
     }
     else {
