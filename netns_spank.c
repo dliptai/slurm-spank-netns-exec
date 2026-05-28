@@ -48,7 +48,7 @@
 #define PARTNAME_MAX 64
 #define NS_NAME_MAX 16
 
-/* Return codes for error paths*/
+/* Return codes for error paths */
 
 #define RC_MISSING_CONFIG 1
 #define RC_UNKNOWN_OPT 2
@@ -215,9 +215,12 @@ static int enter_namespace(const char *ns_path, int ns_type)
 
 
 /* ===========================================================================
- * If the job's partition matches cfg_partition, enters the pre-created
- * namespace via setns(). The namespace is inherited across the subsequent
- * become_user() privilege drop and execve(), so the job runs in that namespace.
+ * namespace_plugin()
+ *
+ * Called from slurm_spank_init_post_opt() (runs once per job in slurmstepd).
+ * Enters the pre-created namespaces via setns(). All tasks/steps for this job
+ * inherit the namespaces from slurmstepd across the subsequent become_user()
+ * privilege drop and execve(), so the job runs in those namespaces.
  * ========================================================================= */
 int namespace_plugin(spank_t sp, int ac, char **av)
 {
@@ -257,9 +260,7 @@ int namespace_plugin(spank_t sp, int ac, char **av)
         slurm_verbose("netns_spank: failed to enter network namespace -- skipping mount namespace setup");
         return rc;
     }
-    else {
-        entered_netns = 1;
-    }
+    entered_netns = 1;
 
     /* Enter mount namespace */
     rc = enter_namespace(cfg_mntns, CLONE_NEWNS);
@@ -267,9 +268,7 @@ int namespace_plugin(spank_t sp, int ac, char **av)
         slurm_verbose("netns_spank: failed to enter mount namespace");
         return rc;
     }
-    else {
-        entered_mntns = 1;
-    }
+    entered_mntns = 1;
 
     slurm_verbose("netns_spank: namespace setup complete for job in partition '%s'", job_partition);
     return 0;
@@ -289,7 +288,6 @@ int slurm_spank_init_post_opt(spank_t sp, int ac, char **av)
 #else
         return 0;  /* Exit gracefully in production */
 #endif
-    } else {
-        return 0;
     }
+    return 0;
 }
