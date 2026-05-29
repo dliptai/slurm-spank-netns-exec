@@ -222,13 +222,10 @@ static int enter_namespace(const char *ns_path, int ns_type)
  * inherit the namespaces from slurmstepd across the subsequent become_user()
  * privilege drop and execve(), so the job runs in those namespaces.
  * ========================================================================= */
-int namespace_plugin(spank_t sp, int ac, char **av)
+int namespace_plugin(spank_t sp)
 {
     char job_partition[PARTNAME_MAX] = "";
     int rc;
-
-    /* Suppress unused parameter warnings */
-    (void)ac; (void)av;
 
     if ( entered_netns == 1 ) {
         slurm_verbose("netns_spank: already entered network namespace, skipping");
@@ -280,7 +277,10 @@ int namespace_plugin(spank_t sp, int ac, char **av)
  * ========================================================================= */
 int slurm_spank_init_post_opt(spank_t sp, int ac, char **av)
 {
-    int rc = namespace_plugin(sp, ac, av);
+    /* Suppress unused parameter warnings */
+    (void)ac; (void)av;
+
+    int rc = namespace_plugin(sp);
     if (rc != 0) {
         slurm_verbose("netns_spank: error '%d' during namespace setup", rc);
 #ifdef DEBUG
