@@ -7,7 +7,6 @@
 #include <stdio.h>
 #include <slurm/spank.h>
 #include <string.h>
-#include "netns_spank.h"
 
 /*
 * Mock function.
@@ -61,7 +60,7 @@ int run_test(int argc, char *argv[])
         return rc;
     }
     // Run plugin
-    return slurm_spank_task_init_privileged(NULL, argc, argv);
+    return slurm_spank_init_post_opt(NULL, argc, argv);
 }
 
 
