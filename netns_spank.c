@@ -213,27 +213,13 @@ static int enter_namespace(const char *ns_path, int ns_type)
     return 0;
 }
 
-
-/* ===========================================================================
- * namespace_plugin()
- *
- * Called from slurm_spank_init_post_opt() (runs once per job in slurmstepd).
- * Enters the pre-created namespaces via setns(). All tasks/steps for this job
- * inherit the namespaces from slurmstepd across the subsequent become_user()
- * privilege drop and execve(), so the job runs in those namespaces.
- * ========================================================================= */
-int namespace_plugin(spank_t sp)
+int network_namespace_plugin(spank_t sp)
 {
     char job_partition[PARTNAME_MAX] = "";
     int rc;
 
     if ( entered_netns == 1 ) {
         slurm_verbose("netns_spank: already entered network namespace, skipping");
-        return 0;
-    }
-
-    if ( entered_mntns == 1 ) {
-        slurm_verbose("netns_spank: already entered mount namespace, skipping");
         return 0;
     }
 
@@ -254,10 +240,37 @@ int namespace_plugin(spank_t sp)
     /* Enter network namespace */
     rc = enter_namespace(cfg_netns, CLONE_NEWNET);
     if (rc > 0) {
-        slurm_verbose("netns_spank: failed to enter network namespace -- skipping mount namespace setup");
+        slurm_verbose("netns_spank: failed to enter network namespace");
         return rc;
     }
     entered_netns = 1;
+
+    return 0;
+}
+
+int mount_namespace_plugin(spank_t sp)
+{
+    char job_partition[PARTNAME_MAX] = "";
+    int rc;
+
+    if ( entered_mntns == 1 ) {
+        slurm_verbose("netns_spank: already entered mount namespace, skipping");
+        return 0;
+    }
+
+    if (spank_context() != S_CTX_REMOTE) {
+        slurm_verbose("netns_spank: skipping - not running in remote task context");
+        return RC_NOT_REMOTE_CTX;
+    }
+
+    /* Check partition */
+    if (spank_getenv(sp, "SLURM_JOB_PARTITION", job_partition,
+                     sizeof(job_partition)) != ESPANK_SUCCESS) {
+        slurm_error("netns_spank: failed to get SLURM_JOB_PARTITION");
+        return RC_GETENV_FAIL;
+    }
+    if (strncmp(job_partition, cfg_partition, PARTNAME_MAX) != 0)
+        return RC_WRONG_PARTITION;  /* not our partition */
 
     /* Enter mount namespace */
     rc = enter_namespace(cfg_mntns, CLONE_NEWNS);
@@ -267,7 +280,6 @@ int namespace_plugin(spank_t sp)
     }
     entered_mntns = 1;
 
-    slurm_verbose("netns_spank: namespace setup complete for job in partition '%s'", job_partition);
     return 0;
 }
 
@@ -280,9 +292,26 @@ int slurm_spank_init_post_opt(spank_t sp, int ac, char **av)
     /* Suppress unused parameter warnings */
     (void)ac; (void)av;
 
-    int rc = namespace_plugin(sp);
+    int rc = mount_namespace_plugin(sp);
     if (rc != 0) {
-        slurm_verbose("netns_spank: error '%d' during namespace setup", rc);
+        slurm_verbose("netns_spank: error '%d' during mount namespace setup", rc);
+#ifdef DEBUG
+        return rc;
+#else
+        return 0;  /* Exit gracefully in production */
+#endif
+    }
+    return 0;
+}
+
+int slurm_spank_task_init_privileged(spank_t sp, int ac, char **av)
+{
+    /* Suppress unused parameter warnings */
+    (void)ac; (void)av;
+
+    int rc = network_namespace_plugin(sp);
+    if (rc != 0) {
+        slurm_verbose("netns_spank: error '%d' during network namespace setup", rc);
 #ifdef DEBUG
         return rc;
 #else
