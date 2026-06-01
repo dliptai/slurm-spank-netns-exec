@@ -38,27 +38,6 @@ spank_err_t spank_getenv(spank_t sp, const char *var, char *buf, int len) {
     return ESPANK_SUCCESS;
 }
 
-static const char *error_name(int rc) {
-    switch (rc) {
-        case 0: return "SUCCESS";
-        case RC_MISSING_CONFIG: return "RC_MISSING_CONFIG";
-        case RC_UNKNOWN_OPT: return "RC_UNKNOWN_OPT";
-        case RC_NOT_REMOTE_CTX: return "RC_NOT_REMOTE_CTX";
-        case RC_GETENV_FAIL: return "RC_GETENV_FAIL";
-        case RC_WRONG_PARTITION: return "RC_WRONG_PARTITION";
-        case RC_NO_NAMESPACE: return "RC_NO_NAMESPACE";
-        case RC_NAMESPACE_OPEN_FAIL: return "RC_NAMESPACE_OPEN_FAIL";
-        case RC_NAMESPACE_NOT_ROOT: return "RC_NAMESPACE_NOT_ROOT";
-        case RC_SETNS_FAIL: return "RC_SETNS_FAIL";
-        case RC_UNKNOWN_NS_TYPE: return "RC_UNKNOWN_NS_TYPE";
-        case RC_UNSHARE_FAIL: return "RC_UNSHARE_FAIL";
-        case RC_MOUNT_RSLAVE_FAIL: return "RC_MOUNT_RSLAVE_FAIL";
-        case RC_MOUNT_SYS_FAIL: return "RC_MOUNT_SYS_FAIL";
-        case RC_BIND_MOUNTS_FAIL: return "RC_BIND_MOUNTS_FAIL";
-        default: return "UNKNOWN";
-    }
-}
-
 int main(int argc, char **argv) {
     if (argc < 2) {
         fprintf(stderr, "usage example: %s partition=test-partition netns=/var/run/netns/test-ns\n", argv[0]);
@@ -67,11 +46,10 @@ int main(int argc, char **argv) {
 
     int rc = slurm_spank_init(NULL, argc - 1, argv + 1);
     if (rc != 0) {
-        fprintf(stderr, "slurm_spank_init failed: %s (%d)\n", error_name(rc), rc);
+        fprintf(stderr, "slurm_spank_init failed: %d\n", rc);
         return rc;
     }
 
     rc = slurm_spank_task_init_privileged(NULL, argc - 1, argv + 1);
-    printf("result: %s (%d)\n", error_name(rc), rc);
     return rc;
 }

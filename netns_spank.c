@@ -68,7 +68,7 @@ static int parse_opts(int ac, char **av)
             strncpy(cfg_netns, av[i] + 6, sizeof(cfg_netns) - 1);
             cfg_netns[sizeof(cfg_netns) - 1] = '\0';
         } else {
-            log_error("unknown option '%s'", av[i]);
+            log_error("Unknown option '%s'", av[i]);
             return RC_UNKNOWN_OPT;
         }
     }
@@ -122,7 +122,7 @@ static int enter_namespace(const char *ns_path, int ns_type)
         case CLONE_NEWUTS:    strncpy(ns_name, "uts", sizeof(ns_name) - 1); break;
         case 0:               strncpy(ns_name, "unspecified", sizeof(ns_name) - 1); break;
         default:
-            log_error("invalid namespace type %d", ns_type);
+            log_error("Invalid namespace type %d", ns_type);
             return RC_UNKNOWN_NS_TYPE;
     }
 
@@ -155,13 +155,13 @@ static int enter_namespace(const char *ns_path, int ns_type)
      * The namespace is inherited across the subsequent become_user() and execve().
      */
     if (setns(fd, ns_type) < 0) {
-        log_error("setns(%s, '%s'): %m", ns_path, ns_name);
+        log_error("setns() fails with path '%s', type '%s'): %m", ns_path, ns_name);
         close(fd);
         return RC_SETNS_FAIL;
     }
 
     close(fd);
-    log_verbose("task entered %s namespace '%s'", ns_name, ns_path);
+    log_verbose("Task entered %s namespace '%s'", ns_name, ns_path);
     return 0;
 }
 
@@ -172,14 +172,14 @@ int enter_network_namespace(spank_t sp)
     (void)sp;  /* unused */
 
     if ( entered_netns == 1 ) {
-        log_verbose("already entered network namespace, skipping");
+        log_verbose("Already entered network namespace, skipping");
         return 0;
     }
 
     /* Enter network namespace */
     rc = enter_namespace(cfg_netns, CLONE_NEWNET);
     if (rc > 0) {
-        log_verbose("failed to enter network namespace");
+        log_verbose("Failed to enter network namespace");
         return rc;
     }
     entered_netns = 1;
@@ -194,13 +194,13 @@ int plugin(spank_t sp)
 
     /* Check context */
     if (spank_context() != S_CTX_REMOTE) {
-        log_verbose("skipping - not running in remote task context");
+        log_verbose("Skipping plugin - not running in remote task context");
         return RC_NOT_REMOTE_CTX;
     }
 
     /* Get partition */
     if (spank_getenv(sp, "SLURM_JOB_PARTITION", job_partition, sizeof(job_partition)) != ESPANK_SUCCESS) {
-        log_error("failed to get SLURM_JOB_PARTITION");
+        log_error("Failed to get SLURM_JOB_PARTITION");
         return RC_GETENV_FAIL;
     }
     /* Check partition */
@@ -212,15 +212,15 @@ int plugin(spank_t sp)
     if ( entered_netns == 0 ) {
         rc = enter_namespace(cfg_netns, CLONE_NEWNET);
         if (rc > 0) {
-            log_verbose("failed to enter network namespace");
+            log_verbose("Failed to enter network namespace");
             return rc; // Do not try to create bind mounts if we failed to enter the network namespace
         }
     } else {
-        log_verbose("already entered network namespace, skipping");
+        log_verbose("Already entered network namespace, skipping");
     }
 
     if ( entered_mntns == 1) {
-        log_verbose("already entered mount namespace, skipping");
+        log_verbose("Already entered mount namespace, skipping");
         return 0;
     }
 
@@ -250,7 +250,7 @@ int slurm_spank_task_init_privileged(spank_t sp, int ac, char **av)
     /* Enter network namespace and set up bind mounts */
     int rc = plugin(sp);
     if (rc != 0) {
-        log_verbose("error '%d' during network namespace setup", rc);
+        log_verbose("Error during network namespace plugin (%d)", rc);
 #ifdef TEST
         return rc;
 #else

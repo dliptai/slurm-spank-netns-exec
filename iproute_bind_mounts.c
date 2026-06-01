@@ -10,14 +10,14 @@ int bind_etc(const char *name){
     DIR *dir;
 
     if (strlen(name) >= NAME_MAX) {
-        log_error("namespace name too long");
+        log_error("Namespace name too long");
         return RC_NAMESPACE_TOO_LONG;
     }
 
     snprintf(etc_netns_path, sizeof(etc_netns_path), "%s/%s", NETNS_ETC_DIR, name);
     dir = opendir(etc_netns_path);
     if (!dir) {
-        log_verbose("no config files to bind mount. '%s' doesn't exist", etc_netns_path);
+        log_verbose("No config files to bind mount. '%s' doesn't exist", etc_netns_path);
         return 0;
     }
 
@@ -32,10 +32,11 @@ int bind_etc(const char *name){
             log_error("Bind %s -> %s failed: %m", netns_name, etc_name);
             closedir(dir);
             return RC_BIND_MOUNTS_FAIL;
+        } else {
+            log_verbose("Bind mounted '%s' -> '%s'", netns_name, etc_name);
         }
     }
     closedir(dir);
-    log_verbose("bind mounts from %s to /etc completed", etc_netns_path);
     return 0;
 }
 
@@ -45,7 +46,7 @@ int iproute_bind_mounts(const char *name){
     int rc;
 
     if (unshare(CLONE_NEWNS) < 0) {
-        log_error("unshare failed: %m");
+        log_error("unshare() failed: %m");
         return RC_UNSHARE_FAIL;
     }
     /* Don't let any mounts propagate back to the parent */
@@ -66,7 +67,7 @@ int iproute_bind_mounts(const char *name){
         }
     }
     if (mount(name, "/sys", "sysfs", mountflags, NULL) < 0) {
-        log_error("mount of /sys failed: %m");
+        log_error("Mount of /sys failed: %m");
         return RC_MOUNT_SYS_FAIL;
     }
 
