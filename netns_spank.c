@@ -1,21 +1,21 @@
 /*
- * SPANK plugin for running jobs in a network namespace and a mount namespace.
+ * SPANK plugin for running jobs in a network namespace.
  *
  * PURPOSE:
  *   Automatically moves job tasks into a pre-created named network namespace
- *   and a mount namespace when the job is submitted to a designated
- *   partition. Uses setns() in task_init_privileged (runs as root, pre-execve)
- *   so the job process inherits the namespaces across the privilege drop and
- *   subsequent execve(). The network namespace is entered first, followed by
- *   the mount namespace.
+ *   when the job is submitted to a designated partition. Uses setns() in
+ *   task_init_privileged (runs as root, pre-execve) so the job process
+ *   inherits the namespace across the privilege drop and subsequent
+ *   execve(). The network namespace is entered first, then it mimics the
+ *   behavior of 'ip netns exec' by also creating a temporary mount namspace
+ *   in which it mounts items found under /etc/netns/<nsname>/.
  *
  * CONFIGURATION:
  *   Arguments are set in plugstack.conf, e.g.:
- *     optional <SLURM_LIB_DIR>/netns_spank.so partition=isolated-jobs netns=/var/run/netns/isolated mntns=/var/run/mntns/isolated
+ *     optional <SLURM_LIB_DIR>/netns_spank.so partition=isolated-jobs netns=/var/run/netns/isolated
  *
  *   partition= : jobs must be submitted to this slurm partition (required)
  *   netns=     : full path to the pre-created network namespace (required)
- *   mntns=     : full path to the pre-created mount namespace (required)
  *
  * PRE-REQUISITES:
  *   The namespaces must be created on each applicable compute node, e.g.:
@@ -25,10 +25,6 @@
  *   This creates the network namespace at /var/run/netns/<name>. The namespace
  *   persists until the node reboots and is shared across jobs - it carries
  *   no per-job state. Multiple concurrent jobs safely share it.
- *
- *   For mount namespaces, you must create and persist the namespace separately,
- *   e.g., by bind-mounting from a running process's mount namespace:
- *     mount --bind /proc/<pid>/ns/mnt /var/run/mntns/isolated_mnt
  *
  * DEPLOYMENT:
  *   Build:
@@ -40,53 +36,17 @@
  *     chmod 755 <SLURM_LIB_DIR>/netns_spank.so
  *
  *   Register in /etc/slurm/plugstack.conf:
- *     optional <SLURM_LIB_DIR>/netns_spank.so partition=<p> netns=<ns> mntns=<mnt>
+ *     optional <SLURM_LIB_DIR>/netns_spank.so partition=<p> netns=<ns>
  *
  */
 
-#define _GNU_SOURCE
-#define PARTNAME_MAX 64
-#define NS_NAME_MAX 16
-
-/* Return codes for error paths */
-
-#define RC_MISSING_CONFIG 1
-#define RC_UNKNOWN_OPT 2
-#define RC_NOT_REMOTE_CTX 3
-#define RC_GETENV_FAIL 4
-#define RC_WRONG_PARTITION 5
-#define RC_NO_NAMESPACE 6
-#define RC_NAMESPACE_OPEN_FAIL 7
-#define RC_NAMESPACE_NOT_ROOT 8
-#define RC_SETNS_FAIL 9
-#define RC_UNKNOWN_NS_TYPE 10
-
-#include <slurm/spank.h>
-
-#ifdef DEBUG
-// Redefine logging macros to print to stdout/stderr for testing
-// Undefine the extern function declarations from spank.h first
-#undef slurm_verbose
-#undef slurm_error
-#define slurm_verbose(...) fprintf(stdout, __VA_ARGS__), fprintf(stdout, "\n")
-#define slurm_error(...) fprintf(stderr, __VA_ARGS__), fprintf(stderr, "\n")
-#endif
-
-#include <errno.h>
-#include <fcntl.h>
-#include <limits.h>         /* PATH_MAX */
-#include <sched.h>          /* setns(), CLONE_NEWNS, CLONE_NEWNET, etc... */
-#include <string.h>         /* strncmp(), strncpy() */
-#include <sys/stat.h>       /* fstat() */
-#include <unistd.h>         /* access() */
-#include <stdio.h>          /* snprintf() */
+#include "netns_common.h"
 
 SPANK_PLUGIN(netns_spank, 1);
 
 /* Configured via plugstack.conf arguments */
 static char cfg_partition[PARTNAME_MAX] = "";
 static char cfg_netns[PATH_MAX]         = "";
-static char cfg_mntns[PATH_MAX]         = "";
 
 int entered_netns = 0;
 int entered_mntns = 0;
@@ -95,7 +55,7 @@ int entered_mntns = 0;
 /* ---------------------------------------------------------------------------
  * parse_opts()
  *
- * Reads partition=, netns=, and mntns= from plugstack.conf arguments.
+ * Reads partition= and netns= from plugstack.conf arguments.
  * Returns 0 on success and -1 on failure.
  * ------------------------------------------------------------------------- */
 static int parse_opts(int ac, char **av)
@@ -107,25 +67,18 @@ static int parse_opts(int ac, char **av)
         } else if (strncmp(av[i], "netns=", 6) == 0) {
             strncpy(cfg_netns, av[i] + 6, sizeof(cfg_netns) - 1);
             cfg_netns[sizeof(cfg_netns) - 1] = '\0';
-        } else if (strncmp(av[i], "mntns=", 6) == 0) {
-            strncpy(cfg_mntns, av[i] + 6, sizeof(cfg_mntns) - 1);
-            cfg_mntns[sizeof(cfg_mntns) - 1] = '\0';
         } else {
-            slurm_error("netns_spank: unknown option '%s'", av[i]);
+            log_error("unknown option '%s'", av[i]);
             return RC_UNKNOWN_OPT;
         }
     }
 
     if (!cfg_partition[0]) {
-        slurm_error("netns_spank: partition= is required");
+        log_error("partition= is required");
         return RC_MISSING_CONFIG;
     }
     if (!cfg_netns[0]) {
-        slurm_error("netns_spank: netns= is required");
-        return RC_MISSING_CONFIG;
-    }
-    if (!cfg_mntns[0]) {
-        slurm_error("netns_spank: mntns= is required");
+        log_error("netns= is required");
         return RC_MISSING_CONFIG;
     }
 
@@ -167,8 +120,9 @@ static int enter_namespace(const char *ns_path, int ns_type)
         case CLONE_NEWPID:    strncpy(ns_name, "pid", sizeof(ns_name) - 1); break;
         case CLONE_NEWUSER:   strncpy(ns_name, "user", sizeof(ns_name) - 1); break;
         case CLONE_NEWUTS:    strncpy(ns_name, "uts", sizeof(ns_name) - 1); break;
+        case 0:               strncpy(ns_name, "unspecified", sizeof(ns_name) - 1); break;
         default:
-            slurm_error("netns_spank: invalid namespace type %d", ns_type);
+            log_error("invalid namespace type %d", ns_type);
             return RC_UNKNOWN_NS_TYPE;
     }
 
@@ -181,19 +135,17 @@ static int enter_namespace(const char *ns_path, int ns_type)
     fd = open(ns_path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
     if (fd < 0) {
         if (errno == ENOENT) {
-            slurm_error("netns_spank: %s namespace '%s' not found - "
-                        "job will run in default %s namespace. "
-                        "Has the namespace been created on this node?",
+            log_error("%s namespace '%s' not found - job will run in default %s namespace. Has the namespace been created on this node?",
                         ns_name, ns_path, ns_name);
             return RC_NO_NAMESPACE;
         }
-        slurm_error("netns_spank: open(%s): %m", ns_path);
+        log_error("open(%s): %m", ns_path);
         return RC_NAMESPACE_OPEN_FAIL;
     }
 
     struct stat st;
     if (fstat(fd, &st) < 0 || st.st_uid != 0) {
-        slurm_error("netns_spank: %s namespace not owned by root!", ns_name);
+        log_error("%s namespace not owned by root!", ns_name);
         close(fd);
         return RC_NAMESPACE_NOT_ROOT;
     }
@@ -203,44 +155,31 @@ static int enter_namespace(const char *ns_path, int ns_type)
      * The namespace is inherited across the subsequent become_user() and execve().
      */
     if (setns(fd, ns_type) < 0) {
-        slurm_error("netns_spank: setns(%s, '%s'): %m", ns_path, ns_name);
+        log_error("setns(%s, '%s'): %m", ns_path, ns_name);
         close(fd);
         return RC_SETNS_FAIL;
     }
 
     close(fd);
-    slurm_verbose("netns_spank: task entered %s namespace '%s'", ns_name, ns_path);
+    log_verbose("task entered %s namespace '%s'", ns_name, ns_path);
     return 0;
 }
 
-int network_namespace_plugin(spank_t sp)
+int enter_network_namespace(spank_t sp)
 {
-    char job_partition[PARTNAME_MAX] = "";
     int rc;
 
+    (void)sp;  /* unused */
+
     if ( entered_netns == 1 ) {
-        slurm_verbose("netns_spank: already entered network namespace, skipping");
+        log_verbose("already entered network namespace, skipping");
         return 0;
     }
-
-    if (spank_context() != S_CTX_REMOTE) {
-        slurm_verbose("netns_spank: skipping - not running in remote task context");
-        return RC_NOT_REMOTE_CTX;
-    }
-
-    /* Check partition */
-    if (spank_getenv(sp, "SLURM_JOB_PARTITION", job_partition,
-                     sizeof(job_partition)) != ESPANK_SUCCESS) {
-        slurm_error("netns_spank: failed to get SLURM_JOB_PARTITION");
-        return RC_GETENV_FAIL;
-    }
-    if (strncmp(job_partition, cfg_partition, PARTNAME_MAX) != 0)
-        return RC_WRONG_PARTITION;  /* not our partition */
 
     /* Enter network namespace */
     rc = enter_namespace(cfg_netns, CLONE_NEWNET);
     if (rc > 0) {
-        slurm_verbose("netns_spank: failed to enter network namespace");
+        log_verbose("failed to enter network namespace");
         return rc;
     }
     entered_netns = 1;
@@ -248,70 +187,70 @@ int network_namespace_plugin(spank_t sp)
     return 0;
 }
 
-int mount_namespace_plugin(spank_t sp)
+int plugin(spank_t sp)
 {
     char job_partition[PARTNAME_MAX] = "";
     int rc;
 
-    if ( entered_mntns == 1 ) {
-        slurm_verbose("netns_spank: already entered mount namespace, skipping");
-        return 0;
-    }
-
+    /* Check context */
     if (spank_context() != S_CTX_REMOTE) {
-        slurm_verbose("netns_spank: skipping - not running in remote task context");
+        log_verbose("skipping - not running in remote task context");
         return RC_NOT_REMOTE_CTX;
     }
 
-    /* Check partition */
-    if (spank_getenv(sp, "SLURM_JOB_PARTITION", job_partition,
-                     sizeof(job_partition)) != ESPANK_SUCCESS) {
-        slurm_error("netns_spank: failed to get SLURM_JOB_PARTITION");
+    /* Get partition */
+    if (spank_getenv(sp, "SLURM_JOB_PARTITION", job_partition, sizeof(job_partition)) != ESPANK_SUCCESS) {
+        log_error("failed to get SLURM_JOB_PARTITION");
         return RC_GETENV_FAIL;
     }
+    /* Check partition */
     if (strncmp(job_partition, cfg_partition, PARTNAME_MAX) != 0)
-        return RC_WRONG_PARTITION;  /* not our partition */
+        return RC_WRONG_PARTITION;
 
-    /* Enter mount namespace */
-    rc = enter_namespace(cfg_mntns, CLONE_NEWNS);
-    if (rc > 0) {
-        slurm_verbose("netns_spank: failed to enter mount namespace");
-        return rc;
+
+    /* Enter network namespace if not already entered */
+    if ( entered_netns == 0 ) {
+        rc = enter_namespace(cfg_netns, CLONE_NEWNET);
+        if (rc > 0) {
+            log_verbose("failed to enter network namespace");
+            return rc; // Do not try to create bind mounts if we failed to enter the network namespace
+        }
+    } else {
+        log_verbose("already entered network namespace, skipping");
     }
-    entered_mntns = 1;
 
-    return 0;
+    if ( entered_mntns == 1) {
+        log_verbose("already entered mount namespace, skipping");
+        return 0;
+    }
+
+    /* Create mount namespace and bind mounts if not already done so */
+
+    // Get the namespace name from the path, e.g. "external" from "/var/run/netns/external"
+    const char *ns_name = strrchr(cfg_netns, '/');
+    if (ns_name) {
+        ns_name++;  // Move past the '/'
+    } else {
+        ns_name = cfg_netns;  // If no '/' found, use the whole string
+    }
+
+    return iproute_bind_mounts(ns_name);
+
 }
 
 /* ===========================================================================
  * Configuration and setup errors are logged but gracefully skipped so the job
  * runs in the default namespace. Only slurm_spank_init() errors are fatal.
  * ========================================================================= */
-int slurm_spank_init_post_opt(spank_t sp, int ac, char **av)
-{
-    /* Suppress unused parameter warnings */
-    (void)ac; (void)av;
-
-    int rc = mount_namespace_plugin(sp);
-    if (rc != 0) {
-        slurm_verbose("netns_spank: error '%d' during mount namespace setup", rc);
-#ifdef DEBUG
-        return rc;
-#else
-        return 0;  /* Exit gracefully in production */
-#endif
-    }
-    return 0;
-}
-
 int slurm_spank_task_init_privileged(spank_t sp, int ac, char **av)
 {
     /* Suppress unused parameter warnings */
     (void)ac; (void)av;
 
-    int rc = network_namespace_plugin(sp);
+    /* Enter network namespace and set up bind mounts */
+    int rc = plugin(sp);
     if (rc != 0) {
-        slurm_verbose("netns_spank: error '%d' during network namespace setup", rc);
+        log_verbose("error '%d' during network namespace setup", rc);
 #ifdef DEBUG
         return rc;
 #else
