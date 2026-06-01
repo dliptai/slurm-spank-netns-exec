@@ -251,7 +251,7 @@ int slurm_spank_task_init_privileged(spank_t sp, int ac, char **av)
     int rc = plugin(sp);
     if (rc != 0) {
         log_verbose("error '%d' during network namespace setup", rc);
-#ifdef DEBUG
+#ifdef TEST
         return rc;
 #else
         return 0;  /* Exit gracefully in production */
