@@ -1,4 +1,22 @@
-/* Adapted from iproute2 (GPL-2.0 license)*/
+/* SPDX-License-Identifier: GPL-2.0-or-later */
+/*
+ * Derived from iproute2 namespace.c
+ *
+ * https://github.com/iproute2/iproute2/blob/62d47c2dbc0eaecdd20c0e19406067488025e92e/lib/namespace.c
+ *
+ * Original source:
+ *   iproute2: namespace.c
+ *
+ * Original functions:
+ *   - bind_etc()
+ *   - netns_switch()
+ *
+ * Modifications:
+ *   - Changed logging to use custom logging functions
+ *   - Changed return codes to use plugin-specific error codes
+ *   - Removed setns() into the network namespace
+ */
+
 #include "netns_common.h"
 
 
