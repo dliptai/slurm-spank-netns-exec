@@ -82,6 +82,12 @@ static int parse_opts(int ac, char **av)
         return RC_MISSING_CONFIG;
     }
 
+    // Ensure netns contains no '/' characters to prevent directory traversal attacks
+    if (strchr(cfg_netns, '/')) {
+        log_error("Invalid netns");
+        return RC_INVALID_OPT;
+    }
+
     return 0;
 }
 
@@ -112,24 +118,15 @@ int plugin(spank_t sp)
     if (strncmp(job_partition, cfg_partition, PARTNAME_MAX) != 0)
         return RC_WRONG_PARTITION;
 
-    // Get the namespace name from the path, e.g. "external" from "/var/run/netns/external"
-    const char *ns_name = strrchr(cfg_netns, '/');
-    if (ns_name) {
-        ns_name++;  // Move past the '/'
-    } else {
-        ns_name = cfg_netns;  // If no '/' found, use the whole string
-    }
-
     if ( entered_netns == 1 ) {
         log_verbose("Already entered network namespace, skipping");
         return 0;
     }
 
-    rc = netns_switch(ns_name);
+    rc = netns_switch(cfg_netns);
     if (rc == 0)
         entered_netns = 1;
     return rc;
-
 
 }
 

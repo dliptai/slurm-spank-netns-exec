@@ -18,19 +18,18 @@
 /* Return codes for error paths */
 #define RC_MISSING_CONFIG       1
 #define RC_UNKNOWN_OPT          2
-#define RC_NOT_REMOTE_CTX       3
-#define RC_GETENV_FAIL          4
-#define RC_WRONG_PARTITION      5
-#define RC_NO_NAMESPACE         6
+#define RC_INVALID_OPT          3
+#define RC_NOT_REMOTE_CTX       4
+#define RC_GETENV_FAIL          5
+#define RC_WRONG_PARTITION      6
 #define RC_NAMESPACE_OPEN_FAIL  7
 #define RC_NAMESPACE_NOT_ROOT   8
 #define RC_SETNS_FAIL           9
-#define RC_UNKNOWN_NS_TYPE      10
-#define RC_UNSHARE_FAIL         11
-#define RC_MOUNT_RSLAVE_FAIL    12
-#define RC_MOUNT_SYS_FAIL       13
-#define RC_BIND_MOUNTS_FAIL     14
-#define RC_NAMESPACE_TOO_LONG   15
+#define RC_UNSHARE_FAIL         10
+#define RC_MOUNT_RSLAVE_FAIL    11
+#define RC_MOUNT_SYS_FAIL       12
+#define RC_BIND_MOUNTS_FAIL     13
+#define RC_NAMESPACE_TOO_LONG   14
 
 /* Common includes */
 #include <limits.h>
