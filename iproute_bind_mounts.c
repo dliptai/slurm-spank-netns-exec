@@ -7,14 +7,11 @@
  * Original source:
  *   iproute2: namespace.c
  *
- * Original functions:
- *   - bind_etc()
- *   - netns_switch()
- *
  * Modifications:
  *   - Changed logging to use custom logging functions
  *   - Changed return codes to use plugin-specific error codes
- *   - Removed setns() into the network namespace
+ *   - Added check to ensure namespace file is owned by root
+ *   - Added O_NOFOLLOW to open() to prevent symlink attacks
  */
 
 #include "netns_common.h"
@@ -58,10 +55,42 @@ int bind_etc(const char *name){
     return 0;
 }
 
-int iproute_bind_mounts(const char *name){
+int netns_switch(const char *name)
+{
+    char net_path[PATH_MAX];
+    int netns;
     unsigned long mountflags = 0;
     struct statvfs fsstat;
-    int rc;
+
+    /*
+     * Open the namespace file with secure flags:
+     *   O_RDONLY       - read-only (we only need to pass it to setns)
+     *   O_CLOEXEC      - close on execve() to prevent leaking the fd to the job
+     *   O_NOFOLLOW     - fail if ns_path is a symlink (prevents symlink attacks)
+     */
+    snprintf(net_path, sizeof(net_path), "%s/%s", NETNS_RUN_DIR, name);
+    netns = open(net_path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
+    if (netns < 0) {
+        log_error("Cannot open network namespace \"%s\": %m", name);
+        return RC_NAMESPACE_OPEN_FAIL;
+    }
+
+    /* Ensure namespace is owned by root */
+    struct stat st;
+    if (fstat(netns, &st) < 0 || st.st_uid != 0) {
+        log_error("%s namespace not owned by root!", name);
+        close(netns);
+        return RC_NAMESPACE_NOT_ROOT;
+    }
+
+    if (setns(netns, CLONE_NEWNET) < 0) {
+        log_error("setting the network namespace \"%s\" failed: %m", name);
+        close(netns);
+        return RC_SETNS_FAIL;
+    }
+    close(netns);
+
+    log_verbose("Task entered network namespace '%s'", name);
 
     if (unshare(CLONE_NEWNS) < 0) {
         log_error("unshare() failed: %m");
@@ -90,9 +119,5 @@ int iproute_bind_mounts(const char *name){
     }
 
     /* Setup bind mounts for config files in /etc */
-    rc = bind_etc(name);
-    if (rc != 0)
-        return rc;
-
-    return 0;
+    return bind_etc(name);
 }

@@ -10,6 +10,7 @@
 
 /* Common constants */
 #define NETNS_ETC_DIR "/etc/netns"
+#define NETNS_RUN_DIR "/var/run/netns"
 #define PARTNAME_MAX 64
 #define NS_NAME_MAX 16
 
@@ -58,7 +59,7 @@
 #define log_error(...)   PLUGIN_ERROR(PLUGIN_NAME ": " __VA_ARGS__)
 
 /* Function declarations */
-int iproute_bind_mounts(const char *name);
+int netns_switch(const char *name);
 int slurm_spank_task_init_privileged(spank_t sp, int ac, char **av);
 
 #endif
