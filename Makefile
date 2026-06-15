@@ -13,7 +13,7 @@ clean:
 	rm -f netns_spank.so test
 
 print_example_conf:
-	@echo optional ${PWD}/netns_spank.so partition=partition_name netns=/var/run/netns/netns_name
+	@echo optional ${PWD}/netns_spank.so partition=partition_name netns=netns_name
 
 help:
 	@echo "Usage: make [target]"
