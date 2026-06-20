@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 #ifndef NETNS_COMMON_H
 #define NETNS_COMMON_H
 
@@ -10,25 +11,25 @@
 
 /* Common constants */
 #define NETNS_ETC_DIR "/etc/netns"
+#define NETNS_RUN_DIR "/var/run/netns"
 #define PARTNAME_MAX 64
 #define NS_NAME_MAX 16
 
 /* Return codes for error paths */
 #define RC_MISSING_CONFIG       1
 #define RC_UNKNOWN_OPT          2
-#define RC_NOT_REMOTE_CTX       3
-#define RC_GETENV_FAIL          4
-#define RC_WRONG_PARTITION      5
-#define RC_NO_NAMESPACE         6
+#define RC_INVALID_OPT          3
+#define RC_NOT_REMOTE_CTX       4
+#define RC_GETENV_FAIL          5
+#define RC_WRONG_PARTITION      6
 #define RC_NAMESPACE_OPEN_FAIL  7
 #define RC_NAMESPACE_NOT_ROOT   8
 #define RC_SETNS_FAIL           9
-#define RC_UNKNOWN_NS_TYPE      10
-#define RC_UNSHARE_FAIL         11
-#define RC_MOUNT_RSLAVE_FAIL    12
-#define RC_MOUNT_SYS_FAIL       13
-#define RC_BIND_MOUNTS_FAIL     14
-#define RC_NAMESPACE_TOO_LONG   15
+#define RC_UNSHARE_FAIL         10
+#define RC_MOUNT_RSLAVE_FAIL    11
+#define RC_MOUNT_SYS_FAIL       12
+#define RC_BIND_MOUNTS_FAIL     13
+#define RC_NAMESPACE_TOO_LONG   14
 
 /* Common includes */
 #include <limits.h>
@@ -58,7 +59,7 @@
 #define log_error(...)   PLUGIN_ERROR(PLUGIN_NAME ": " __VA_ARGS__)
 
 /* Function declarations */
-int iproute_bind_mounts(const char *name);
+int netns_switch(const char *name);
 int slurm_spank_task_init_privileged(spank_t sp, int ac, char **av);
 
 #endif

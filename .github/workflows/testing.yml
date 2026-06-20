@@ -77,25 +77,22 @@ jobs:
           sudo ip netns add test
 
           # Set up fake 'network namespace' files
-          sudo touch /tmp/test
-          touch /tmp/ns_nonroot && sudo chown nobody /tmp/ns_nonroot
+          sudo touch /var/run/netns/test.fake
+          sudo touch /var/run/netns/test.nonroot && sudo chown nobody /var/run/netns/test.nonroot
           sudo ln -s /var/run/netns/test /var/run/netns/test.link
-
-          # Ensure there is a non-existent path for testing missing netns
-          sudo rm -f /tmp/nonexistent
 
           # -----------------------------------------------------
 
-          run_test "end-to-end"                   0 "testpart"  1 "partition=testpart netns=/var/run/netns/test"
+          run_test "end-to-end"                   0 "testpart"  1 "partition=testpart netns=test"
           run_test "Missing config"               1 "testpart"  1 "partition=testpart"
-          run_test "Unknown config"               2 "testpart"  1 "partition=testpart netns=/var/run/netns/test UNKNOWN_OPTION=value"
-          run_test "Not remote context"           3 "testpart"  0 "partition=testpart netns=/var/run/netns/test"
-          run_test "Missing SLURM_JOB_PARTITION"  4 ""          1 "partition=testpart netns=/var/run/netns/test"
-          run_test "Wrong SLURM_JOB_PARTITION"    5 "wrongpart" 1 "partition=testpart netns=/var/run/netns/test"
-          run_test "Missing netns"                6 "testpart"  1 "partition=testpart netns=/tmp/nonexistent"
-          run_test "Unopenable netns"             7 "testpart"  1 "partition=testpart netns=/var/run/netns/test.link"
-          run_test "Netns path not owned by root" 8 "testpart"  1 "partition=testpart netns=/tmp/ns_nonroot"
-          run_test "setns() fail"                 9 "testpart"  1 "partition=testpart netns=/tmp/test"
+          run_test "Unknown config option"        2 "testpart"  1 "partition=testpart netns=test UNKNOWN_OPTION=value"
+          run_test "Invalid config option"        3 "testpart"  1 "partition=testpart netns=/var/run/netns/test"
+          run_test "Not remote context"           4 "testpart"  0 "partition=testpart netns=test"
+          run_test "Missing SLURM_JOB_PARTITION"  5 ""          1 "partition=testpart netns=test"
+          run_test "Wrong SLURM_JOB_PARTITION"    6 "wrongpart" 1 "partition=testpart netns=test"
+          run_test "Unopenable netns"             7 "testpart"  1 "partition=testpart netns=test.link"
+          run_test "Namespace not root"           8 "testpart"  1 "partition=testpart netns=test.nonroot"
+          run_test "setns() fail"                 9 "testpart"  1 "partition=testpart netns=test.fake"
 
           # Cleanup
           sudo ip netns delete test
